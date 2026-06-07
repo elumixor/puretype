@@ -3,23 +3,50 @@ default_platform(:ios)
 PROJECT = "App/App.xcodeproj"
 SCHEME = "PureType"
 APP_IDENTIFIER = "app.puretype"
+WATCH_IDENTIFIER = "app.puretype.watchkitapp"
+WIDGET_IDENTIFIER = "app.puretype.watchkitapp.widget"
+APP_GROUP = "group.app.puretype"
+TEAM_ID = "464K6UHCU4"
+
+def make_api_key
+  key_args = { key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+               issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+               in_house: false }
+  if ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    key_args[:key_filepath] = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+  else
+    key_args[:key_content] = ENV.fetch("APP_STORE_CONNECT_API_KEY_CONTENT")
+    key_args[:is_key_content_base64] = false
+  end
+  app_store_connect_api_key(**key_args)
+end
 
 platform :ios do
+  # One-time (idempotent) provisioning: registers the watch + widget bundle
+  # IDs and the App Group on the Developer Portal, enables the App Groups
+  # capability on every identifier, and associates the group. Safe to re-run.
+  # App-group *association* via the ASC API key is best-effort; if Apple rejects
+  # it, the lane prints exactly what to click in the portal.
+  desc "Create watch/widget bundle IDs + App Group (idempotent)"
+  lane :setup_watch do
+    require "spaceship"
+    token = Spaceship::ConnectAPI::Token.create(
+      key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+      issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+      filepath: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    )
+    Spaceship::ConnectAPI.token = token
+
+    ensure_bundle_id(WATCH_IDENTIFIER, "PureType Watch")
+    ensure_bundle_id(WIDGET_IDENTIFIER, "PureType Watch Widget")
+    [APP_IDENTIFIER, WATCH_IDENTIFIER, WIDGET_IDENTIFIER].each { |id| enable_app_groups(id) }
+    ensure_app_group(APP_GROUP, "PureType App Group")
+    UI.success("Watch provisioning prepared.")
+  end
+
   desc "Build and upload a new TestFlight build"
   lane :beta do
-    # App Store Connect API key — required for both build-number lookup and upload.
-    # Locally: set APP_STORE_CONNECT_API_KEY_PATH to a .p8 file on disk.
-    # CI: provide APP_STORE_CONNECT_API_KEY_CONTENT (base64-encoded .p8) instead.
-    key_args = { key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
-                 issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
-                 in_house: false }
-    if ENV["APP_STORE_CONNECT_API_KEY_PATH"]
-      key_args[:key_filepath] = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
-    else
-      key_args[:key_content] = ENV.fetch("APP_STORE_CONNECT_API_KEY_CONTENT")
-      key_args[:is_key_content_base64] = false
-    end
-    api_key = app_store_connect_api_key(**key_args)
+    api_key = make_api_key
 
     next_build = latest_testflight_build_number(
       app_identifier: APP_IDENTIFIER,
@@ -32,18 +59,35 @@ platform :ios do
       build_number: next_build
     )
 
-    # Regenerate the App Store provisioning profile to include the current
-    # distribution cert. force:true also forces a re-fetch when the local
-    # state is stale, which CI always is.
-    sigh(
-      api_key: api_key,
-      app_identifier: APP_IDENTIFIER,
-      force: true
-    )
-    profile_name = lane_context[SharedValues::SIGH_NAME]
+    # Keep the embedded watch app + widget version-locked to the host app, or
+    # App Store validation rejects the upload.
+    app_version = get_info_plist_value(path: "App/App/Info.plist", key: "CFBundleShortVersionString")
+    [["App/WatchApp/Info.plist"], ["App/WatchWidget/Info.plist"]].each do |(plist)|
+      set_info_plist_value(path: plist, key: "CFBundleShortVersionString", value: app_version)
+      set_info_plist_value(path: plist, key: "CFBundleVersion", value: next_build.to_s)
+    end
 
-    # The App target's Release config has manual signing baked in via
-    # pbxproj (CODE_SIGN_STYLE=Manual + PROVISIONING_PROFILE_SPECIFIER).
+    # Make sure the new identifiers + App Group exist before sigh runs.
+    setup_watch
+
+    # One App Store profile per signed target (force re-fetch — CI is stateless).
+    app_profile = make_profile(api_key, APP_IDENTIFIER)
+    watch_profile = make_profile(api_key, WATCH_IDENTIFIER)
+    widget_profile = make_profile(api_key, WIDGET_IDENTIFIER)
+
+    # Bake the freshly-created profile names into the watch + widget Release
+    # configs (the App target already has manual signing baked into pbxproj).
+    update_code_signing_settings(
+      path: PROJECT, use_automatic_signing: false, team_id: TEAM_ID,
+      targets: ["PureTypeWatch"], code_sign_identity: "Apple Distribution",
+      profile_name: watch_profile, build_configurations: ["Release"]
+    )
+    update_code_signing_settings(
+      path: PROJECT, use_automatic_signing: false, team_id: TEAM_ID,
+      targets: ["PureTypeWatchWidget"], code_sign_identity: "Apple Distribution",
+      profile_name: widget_profile, build_configurations: ["Release"]
+    )
+
     # Don't pass signing flags via xcargs — they leak into SPM dep targets
     # (AppAuth, GoogleSignIn, Facebook SDK) which can't be signed.
     build_app(
@@ -57,7 +101,11 @@ platform :ios do
       export_options: {
         method: "app-store",
         signingStyle: "manual",
-        provisioningProfiles: { APP_IDENTIFIER => profile_name },
+        provisioningProfiles: {
+          APP_IDENTIFIER => app_profile,
+          WATCH_IDENTIFIER => watch_profile,
+          WIDGET_IDENTIFIER => widget_profile,
+        },
       }
     )
 
@@ -68,4 +116,51 @@ platform :ios do
       ipa: "build/App.ipa"
     )
   end
+end
+
+def make_profile(api_key, app_identifier)
+  sigh(api_key: api_key, app_identifier: app_identifier, force: true)
+  lane_context[SharedValues::SIGH_NAME]
+end
+
+def ensure_bundle_id(identifier, name)
+  existing = Spaceship::ConnectAPI::BundleId.all.find { |b| b.identifier == identifier }
+  return existing if existing
+  UI.message("Registering bundle id #{identifier}")
+  Spaceship::ConnectAPI::BundleId.create(name: name, identifier: identifier, seed_id: TEAM_ID)
+end
+
+def enable_app_groups(identifier)
+  bundle_id = Spaceship::ConnectAPI::BundleId.all.find { |b| b.identifier == identifier }
+  return unless bundle_id
+  has_cap = bundle_id.get_capabilities.any? do |c|
+    c.capability_type == Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS
+  end
+  return if has_cap
+  begin
+    bundle_id.create_capability(Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS)
+    UI.message("Enabled App Groups on #{identifier}")
+  rescue => e
+    UI.important("Couldn't enable App Groups on #{identifier} via API: #{e.message}")
+  end
+end
+
+# App Group creation/association isn't reliably exposed through the ASC API
+# key. Try the legacy portal endpoint via the same token; on failure, tell the
+# user the single manual step.
+def ensure_app_group(group_id, name)
+  klass = Spaceship::ConnectAPI.const_defined?(:AppGroup) ? Spaceship::ConnectAPI::AppGroup : nil
+  if klass
+    begin
+      return if klass.all.any? { |g| g.identifier == group_id }
+      klass.create(identifier: group_id, name: name)
+      UI.message("Created App Group #{group_id}")
+      return
+    rescue => e
+      UI.important("App Group API create failed: #{e.message}")
+    end
+  end
+  UI.important("If signing fails on the App Group, create it once in the portal:")
+  UI.important("  Certificates, IDs & Profiles → Identifiers → App Groups → + → #{group_id}")
+  UI.important("  then enable App Groups on app.puretype, #{WATCH_IDENTIFIER}, #{WIDGET_IDENTIFIER} and add #{group_id}.")
 end
