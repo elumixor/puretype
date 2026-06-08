@@ -69,6 +69,12 @@ actor APIClient {
         catch { throw APIError.decode }
     }
 
+    func fetchProjects() async throws -> [WatchProject] {
+        let data = try await run(try request("/projects"))
+        do { return try JSONDecoder().decode([WatchProject].self, from: data) }
+        catch { throw APIError.decode }
+    }
+
     @discardableResult
     func createTask(text: String, bucket: String) async throws -> TaskItem {
         let data = try await run(try request("/tasks", method: "POST", json: ["text": text, "bucket": bucket]))

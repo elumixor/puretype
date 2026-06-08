@@ -2,8 +2,9 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var store: TaskStore
-    @State private var showVoice = false
+    @StateObject private var voice = VoiceController()
     @State private var showAdd = false
+    @State private var holding = false
 
     var body: some View {
         NavigationStack {
@@ -23,24 +24,35 @@ struct ContentView: View {
                         .disabled(!store.hasToken)
                 }
             }
-            .sheet(isPresented: $showVoice) { NavigationStack { VoiceView() } }
             .sheet(isPresented: $showAdd) { NavigationStack { AddTaskView() } }
         }
+        .overlay {
+            if voice.active {
+                VoiceOverlay(voice: voice, recorder: voice.recorder)
+                    .background(.ultraThinMaterial)
+                    .ignoresSafeArea()
+            }
+        }
+        .onAppear { voice.store = store }
         .task { await store.load() }
     }
 
     private var taskList: some View {
         List {
-            // Prominent voice button at the top.
+            // Press-and-hold voice button: hold to talk, release to act.
             Section {
-                Button { showVoice = true } label: {
-                    HStack {
-                        Image(systemName: "mic.fill")
-                        Text("Voice").fontWeight(.semibold)
-                        Spacer()
-                    }
+                HStack {
+                    Image(systemName: voice.phase == .recording ? "waveform" : "mic.fill")
+                    Text(voice.phase == .recording ? "Listening…" : "Hold to talk").fontWeight(.semibold)
+                    Spacer()
                 }
-                .listItemTint(.accentColor)
+                .foregroundStyle(voice.phase == .recording ? Color.red : Color.accentColor)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in if !holding { holding = true; voice.beginHold() } }
+                        .onEnded { _ in holding = false; voice.endHold() }
+                )
             }
 
             if let error = store.error {
@@ -122,10 +134,7 @@ struct TaskRow: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(task.completed ? .green : .secondary)
-                Text(task.text)
-                    .strikethrough(task.completed)
-                    .foregroundStyle(task.completed ? .secondary : .primary)
-                    .lineLimit(3)
+                TaskTextView(text: task.text, projects: store.projectsById, completed: task.completed)
                 Spacer(minLength: 0)
             }
         }

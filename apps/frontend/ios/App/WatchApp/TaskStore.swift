@@ -5,6 +5,7 @@ import WidgetKit
 @MainActor
 final class TaskStore: ObservableObject {
     @Published var tasks: [TaskItem] = []
+    @Published var projectsById: [String: WatchProject] = [:]
     @Published var loading = false
     @Published var error: String?
     @Published var hasToken: Bool = Shared.defaults.string(forKey: Shared.Keys.token)?.isEmpty == false
@@ -43,7 +44,12 @@ final class TaskStore: ObservableObject {
         loading = true
         defer { loading = false }
         do {
-            let fetched = try await api.fetchTasks()
+            async let tasksReq = api.fetchTasks()
+            async let projectsReq = try? api.fetchProjects()
+            let fetched = try await tasksReq
+            if let projects = await projectsReq {
+                projectsById = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
+            }
             tasks = fetched
             error = nil
             persistSnapshot()
@@ -105,7 +111,11 @@ final class TaskStore: ObservableObject {
 
     /// Write the snapshot the complication reads and ask WidgetKit to refresh.
     private func persistSnapshot() {
-        makeSnapshot(from: tasks).save()
+        var snap = makeSnapshot(from: tasks)
+        if let raw = snap.nextTaskText {
+            snap.nextTaskText = plainTaskText(raw, projects: projectsById)
+        }
+        snap.save()
         WidgetCenter.shared.reloadAllTimelines()
     }
 }

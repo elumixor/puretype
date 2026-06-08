@@ -87,9 +87,9 @@ watch = project.new_target(:application, WATCH_NAME, :watchos, "10.0", nil, :swi
 watch_group = project.main_group.new_group(WATCH_NAME, "App/WatchApp")
 
 watch_swift = %w[
-  Shared.swift APIClient.swift TaskStore.swift WatchConnectivityProvider.swift
-  AudioRecorder.swift VoiceView.swift AddTaskView.swift ContentView.swift
-  PureTypeWatchApp.swift
+  Shared.swift TokenRender.swift APIClient.swift TaskStore.swift
+  WatchConnectivityProvider.swift AudioRecorder.swift VoiceView.swift
+  AddTaskView.swift ContentView.swift PureTypeWatchApp.swift
 ].map { |f| watch_group.new_reference(File.join(src_root, "WatchApp", f)) }
 watch.add_file_references(watch_swift)
 watch_assets = watch_group.new_reference(File.join(src_root, "WatchApp/Assets.xcassets"))
