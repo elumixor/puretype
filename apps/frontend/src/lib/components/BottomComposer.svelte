@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Loader2 } from "lucide-svelte";
+  import { Loader2, Plus } from "lucide-svelte";
   import RichTaskInput from "./RichTaskInput.svelte";
   import VoiceBubble from "./VoiceBubble.svelte";
   import VoiceButton from "./VoiceButton.svelte";
+  import { features } from "$lib/capabilities.svelte";
   import { voiceTurn } from "$lib/voice-turn.svelte";
 
   let {
@@ -28,7 +29,7 @@
       bg-[linear-gradient(to_top,var(--color-bg)_0%,var(--color-bg)_75%,transparent_100%)]"
     style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));"
   >
-    <VoiceBubble bind:bubble />
+    {#if features.voice}<VoiceBubble bind:bubble />{/if}
     <div class="relative" data-voice-keep>
       <RichTaskInput
         bind:this={input}
@@ -37,11 +38,11 @@
         onEmptyChange={(e) => (empty = e)}
       >
         {#snippet endSlot()}
-          {#if voiceTurn.loading}
+          {#if features.voice && voiceTurn.loading}
             <div class="w-8 h-8 rounded-xl bg-[var(--color-surface-2)] flex items-center justify-center">
               <Loader2 size={14} class="animate-spin text-[var(--color-ink-2)]" />
             </div>
-          {:else}
+          {:else if features.voice}
             <VoiceButton
               compact
               {empty}
@@ -51,6 +52,17 @@
               onStart={(s) => voiceTurn.setRecording(s)}
               onStop={() => voiceTurn.setRecording(null)}
             />
+          {:else}
+            <!-- Web: no voice. Plain send button (always active). -->
+            <button
+              type="button"
+              onclick={() => input?.submit()}
+              aria-label="Add task"
+              class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-[var(--color-accent)]
+                hover:bg-[var(--color-accent-hover)] active:scale-95 transition-all"
+            >
+              <Plus size={16} strokeWidth={2.5} class="text-[var(--color-bg)]" />
+            </button>
           {/if}
         {/snippet}
       </RichTaskInput>
