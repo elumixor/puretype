@@ -22,6 +22,7 @@
     endSlot,
     onsubmit,
     onTabNav,
+    onEmptyChange,
   }: {
     value?: string;
     placeholder?: string;
@@ -34,6 +35,8 @@
     onsubmit: (text: string) => void;
     /** Tab/Shift+Tab with no autocomplete open — commit and move focus. */
     onTabNav?: (dir: 1 | -1) => void;
+    /** Fires whenever the input transitions between empty and non-empty. */
+    onEmptyChange?: (empty: boolean) => void;
   } = $props();
 
   let editor: HTMLDivElement | undefined = $state();
@@ -61,9 +64,20 @@
     if (editor) {
       editor.innerHTML = renderEditorHtml(value, projects.list);
       clipboard = bindClipboard(editor, () => projects.list, onInput);
+      emitEmpty();
     }
     if (autofocus) focusEnd();
   });
+
+  let lastEmpty = true;
+  function emitEmpty() {
+    if (!editor) return;
+    const empty = (editor.textContent ?? "").replace(/​/g, "") === "" && !editor.querySelector("[data-token]");
+    if (empty !== lastEmpty) {
+      lastEmpty = empty;
+      onEmptyChange?.(empty);
+    }
+  }
 
   function focusEnd() {
     if (!editor) return;
@@ -118,6 +132,7 @@
 
   export function clear() {
     if (editor) editor.innerHTML = "";
+    emitEmpty();
   }
   export { submit };
 
@@ -138,6 +153,7 @@
   async function onInput() {
     if (editor && (editor.textContent ?? "").replace(/​/g, "") === "" && !editor.querySelector("[data-token]"))
       editor.innerHTML = "";
+    emitEmpty();
     await tick();
     if (!editor) return close();
     query = readQueryAtCaret(editor);

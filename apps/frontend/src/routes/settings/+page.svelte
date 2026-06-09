@@ -129,21 +129,23 @@
     {/if}
   </section>
 
-  <section class="mt-10">
-    <div class="flex justify-center pt-4">
-      <button
-        type="button"
-        onclick={handleDeleteAccount}
-        disabled={deleting}
-        class="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs
-          text-[var(--color-ink-3)] hover:text-[var(--color-danger)] disabled:opacity-60 transition-colors"
-      >
-        <Trash2 size={13} />
-        <span>{deleting ? "Deleting…" : "Delete account"}</span>
-      </button>
-    </div>
-    <p class="text-center text-[0.7rem] text-[var(--color-ink-3)] mt-2 leading-relaxed">
-      Permanently removes your tasks and account from our servers.
-    </p>
-  </section>
+  {#if !anonymous}
+    <section class="mt-10">
+      <div class="flex justify-center pt-4">
+        <button
+          type="button"
+          onclick={handleDeleteAccount}
+          disabled={deleting}
+          class="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs
+            text-[var(--color-ink-3)] hover:text-[var(--color-danger)] disabled:opacity-60 transition-colors"
+        >
+          <Trash2 size={13} />
+          <span>{deleting ? "Deleting…" : "Delete account"}</span>
+        </button>
+      </div>
+      <p class="text-center text-[0.7rem] text-[var(--color-ink-3)] mt-2 leading-relaxed">
+        Permanently removes your tasks and account from our servers.
+      </p>
+    </section>
+  {/if}
 </main>

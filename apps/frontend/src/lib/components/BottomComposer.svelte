@@ -16,6 +16,10 @@
     onSubmit: (text: string) => void;
     onVoiceRecorded: (file: File) => void | Promise<void>;
   } = $props();
+
+  // Empty input → show the mic (voice is the primary action); once the user
+  // types, the button becomes the send (+) action. Either way it stays active.
+  let empty = $state(true);
 </script>
 
 <div class="fixed bottom-0 inset-x-0 z-40 pointer-events-none">
@@ -26,7 +30,12 @@
   >
     <VoiceBubble bind:bubble />
     <div class="relative" data-voice-keep>
-      <RichTaskInput bind:this={input} placeholder="@ for project, time, place" onsubmit={onSubmit}>
+      <RichTaskInput
+        bind:this={input}
+        placeholder="@ for project, time, place"
+        onsubmit={onSubmit}
+        onEmptyChange={(e) => (empty = e)}
+      >
         {#snippet endSlot()}
           {#if voiceTurn.loading}
             <div class="w-8 h-8 rounded-xl bg-[var(--color-surface-2)] flex items-center justify-center">
@@ -35,6 +44,7 @@
           {:else}
             <VoiceButton
               compact
+              {empty}
               onRecorded={onVoiceRecorded}
               onError={(m) => voiceTurn.setError(m)}
               onTapSend={() => input?.submit()}

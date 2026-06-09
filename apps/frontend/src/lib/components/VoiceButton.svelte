@@ -9,6 +9,7 @@
     onStart,
     onStop,
     compact = false,
+    empty = false,
   }: {
     onTapSend: () => void;
     onRecorded: (file: File) => void;
@@ -16,6 +17,8 @@
     onStart?: (stream: MediaStream) => void;
     onStop?: () => void;
     compact?: boolean;
+    /** Input is empty → idle icon is the mic; otherwise it's the send (+). */
+    empty?: boolean;
   } = $props();
 
   const HOLD_MS = 280;
@@ -142,7 +145,11 @@
   onpointerup={onPointerUp}
   onpointercancel={onPointerCancel}
   oncontextmenu={(e) => e.preventDefault()}
-  aria-label={recording ? "Release to send voice" : "Send (hold to record voice)"}
+  aria-label={recording
+    ? "Release to send voice"
+    : empty
+      ? "Hold to record voice"
+      : "Send (hold to record voice)"}
   class="{compact ? 'w-8 h-8 rounded-xl' : 'w-11 h-[46px] rounded-2xl'} flex items-center justify-center shrink-0
     select-none touch-none [-webkit-touch-callout:none] [-webkit-user-select:none]
     {recording
@@ -151,6 +158,8 @@
 >
   {#if recording}
     <Mic size={compact ? 14 : 18} class="text-white" />
+  {:else if empty}
+    <Mic size={compact ? 14 : 18} class="text-[var(--color-bg)]" />
   {:else}
     <Plus size={compact ? 14 : 18} strokeWidth={2.5} class="text-[var(--color-bg)]" />
   {/if}
