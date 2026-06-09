@@ -170,9 +170,8 @@ async function ensureTrial(subId, t) {
     console.log(`  intro offer exists`);
     return;
   }
-  // Free-trial intro offers reference a $0 (USA) price point.
-  const ppPage = await api("GET", `/v1/subscriptions/${subId}/pricePoints?filter[territory]=USA&limit=200`);
-  const free = (ppPage.data ?? []).find((p) => parseFloat(p.attributes.customerPrice) === 0) ?? ppPage.data?.[0];
+  // A FREE_TRIAL intro offer needs a territory relationship (it applies across
+  // all territories, USA as the anchor) and no price point (it's free).
   await api("POST", "/v1/subscriptionIntroductoryOffers", {
     data: {
       type: "subscriptionIntroductoryOffers",
@@ -183,7 +182,7 @@ async function ensureTrial(subId, t) {
       },
       relationships: {
         subscription: { data: { type: "subscriptions", id: subId } },
-        ...(free ? { subscriptionPricePoint: { data: { type: "subscriptionPricePoints", id: free.id } } } : {}),
+        territory: { data: { type: "territories", id: "USA" } },
       },
     },
   });
