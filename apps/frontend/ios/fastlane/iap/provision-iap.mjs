@@ -150,10 +150,11 @@ async function ensurePrice(subId, t) {
   );
   const pp = points[0];
   console.log(`  nearest USA price point: $${pp.attributes.customerPrice} (${pp.id})`);
+  // Apple rejects a null startDate / explicit preserveCurrentPrice on the first
+  // price for some apps — omit attributes entirely (price effective immediately).
   await api("POST", "/v1/subscriptionPrices", {
     data: {
       type: "subscriptionPrices",
-      attributes: { startDate: null, preserveCurrentPrice: false },
       relationships: {
         subscription: { data: { type: "subscriptions", id: subId } },
         subscriptionPricePoint: { data: { type: "subscriptionPricePoints", id: pp.id } },
@@ -197,10 +198,13 @@ async function main() {
     console.log(`\n• ${key}: ${t.productId}`);
     const subId = await getOrCreateSubscription(groupId, t);
     await ensureLocalization(subId, t);
-    await ensurePrice(subId, t);
-    await ensureTrial(subId, t);
+    // Pricing + trial are non-fatal: Apple's pricing endpoint is flaky and can
+    // be finished in the ASC UI in seconds. Don't let it block creating both
+    // products + localizations in one run.
+    await ensurePrice(subId, t).catch((e) => console.warn(`  ⚠ price not set (do it in ASC): ${e.message}`));
+    await ensureTrial(subId, t).catch((e) => console.warn(`  ⚠ trial not set (do it in ASC): ${e.message}`));
   }
-  console.log("\n✓ Provisioning complete. Finalize pricing/review screenshot + submit in App Store Connect.");
+  console.log("\n✓ Products + localizations created. Confirm price/trial + add a review screenshot, then submit in App Store Connect.");
 }
 
 main().catch((e) => {
