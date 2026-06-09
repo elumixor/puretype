@@ -40,8 +40,15 @@ class ProjectsStore {
       if (!projects.length) return;
       const map = new Map(this.list.map((p) => [p.id, p]));
       for (const p of projects) {
-        if ((p as Project & { deletedAt?: string | null }).deletedAt) map.delete(p.id);
-        else map.set(p.id, p);
+        if ((p as Project & { deletedAt?: string | null }).deletedAt) {
+          map.delete(p.id);
+          continue;
+        }
+        // Don't clobber a locally-newer row — a pull that landed mid-flight
+        // right after a local edit must not overwrite pending changes.
+        const cur = map.get(p.id);
+        if (cur && cur.updatedAt > p.updatedAt) continue;
+        map.set(p.id, p);
       }
       this.list = Array.from(map.values()).sort(byOrder);
       this.reconcileFilters();

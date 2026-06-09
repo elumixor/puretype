@@ -2,7 +2,7 @@ import { browser } from "$app/environment";
 import { api, type Project, type Task } from "$lib/api";
 import { authReady } from "$lib/auth-ready";
 import { getMeta, putMany, setMeta } from "$lib/db/idb";
-import { listPending, markFailed, markInflight, type Op, remove } from "$lib/db/outbox";
+import { listPending, markFailed, markInflight, type Op, pendingOpIds, remove } from "$lib/db/outbox";
 
 // Background sync: drains the outbox (writes) then pulls deltas (reads).
 // Runs on boot, on every outbox enqueue, on online/visibility events, and
@@ -102,11 +102,17 @@ async function drainOutbox() {
 async function pullDeltas() {
   const since = (await getMeta<string>("lastSyncAt")) ?? undefined;
   const res = await api.sync.pull.$post(since ? { since } : {});
+  // Don't let the pull overwrite rows that still have un-pushed local edits.
+  // Once those ops drain, the server bumps their updatedAt past this cursor,
+  // so a later pull re-delivers them and they reconcile normally.
+  const pending = await pendingOpIds();
+  const tasks = res.tasks.filter((t) => !pending.tasks.has(t.id));
+  const projects = res.projects.filter((p) => !pending.projects.has(p.id));
   // Persist tasks + projects locally so a cold open is instant.
-  if (res.tasks.length) await putMany("tasks", res.tasks);
-  if (res.projects.length) await putMany("projects", res.projects);
+  if (tasks.length) await putMany("tasks", tasks);
+  if (projects.length) await putMany("projects", projects);
   await setMeta("lastSyncAt", res.serverTime);
-  for (const cb of listeners) cb({ tasks: res.tasks, projects: res.projects, serverTime: res.serverTime });
+  for (const cb of listeners) cb({ tasks, projects, serverTime: res.serverTime });
 }
 
 // Wire boot triggers. Module side effects are OK here — this file is

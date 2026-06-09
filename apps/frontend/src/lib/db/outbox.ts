@@ -87,6 +87,26 @@ export function listPending(): Promise<OutboxEntry[]> {
   );
 }
 
+// Ids of every task/project with an un-pushed (pending or inflight) op. The
+// sync pull uses this to avoid clobbering local rows that carry edits the
+// server hasn't acked yet — otherwise an in-flight pull (or server clock skew
+// under last-write-wins) can overwrite changes the user just made.
+export async function pendingOpIds(): Promise<{ tasks: Set<string>; projects: Set<string> }> {
+  const rows = await listPending();
+  const tasks = new Set<string>();
+  const projects = new Set<string>();
+  for (const { op } of rows) {
+    if (op.kind === "task.reorder") {
+      for (const it of op.items) tasks.add(it.id);
+    } else if (op.kind.startsWith("task.")) {
+      tasks.add((op as { id: string }).id);
+    } else if (op.kind.startsWith("project.")) {
+      projects.add((op as { id: string }).id);
+    }
+  }
+  return { tasks, projects };
+}
+
 export async function markInflight(seqs: number[]): Promise<void> {
   if (!seqs.length) return;
   await withStore("outbox", "readwrite", async (s) => {
