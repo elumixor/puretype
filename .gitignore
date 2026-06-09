@@ -31,3 +31,8 @@ apps/frontend/playwright.config.ts
 apps/frontend/screenshots/
 
 .claude/
+# App store prep
+apps/frontend/screenshots/
+apps/frontend/playwright/
+apps/frontend/playwright.config.ts
+apps/frontend/test-results/

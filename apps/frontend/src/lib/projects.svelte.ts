@@ -2,7 +2,10 @@ import type { Project } from "$lib/api";
 import { newId } from "$lib/db/id";
 import { del, getAll, put, putMany } from "$lib/db/idb";
 import { enqueue } from "$lib/db/outbox";
+import { ls } from "$lib/storage";
 import { onPulled, sync } from "$lib/sync.svelte";
+
+const MUTED_KEY = "mutedProjects";
 
 // Offline-first projects store. Hydrates from IndexedDB on construction so
 // the UI renders instantly with cached rows, then `boot()` kicks off a sync
@@ -15,8 +18,23 @@ class ProjectsStore {
   filterId = $state<string | null>(null);
   showHidden = $state(false);
   scrollRequestTick = $state(0);
+  // Projects whose tasks are hidden from the list (toggled by tapping a chip).
+  // Persisted locally; a Set wrapped in $state for reactivity.
+  mutedIds = $state<Set<string>>(new Set());
   private previousFilterId: string | null = null;
   private booted = false;
+
+  isMuted(id: string): boolean {
+    return this.mutedIds.has(id);
+  }
+
+  toggleMuted(id: string) {
+    const next = new Set(this.mutedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    this.mutedIds = next;
+    void ls.set(MUTED_KEY, JSON.stringify([...next]));
+  }
 
   get visible(): Project[] {
     return this.list.filter((p) => !p.hidden);
@@ -35,6 +53,12 @@ class ProjectsStore {
     // these rows immediately — no network gate.
     const cached = await getAll<Project>("projects");
     this.list = cached.filter((p) => !(p as Project & { deletedAt?: string | null }).deletedAt).sort(byOrder);
+    try {
+      const raw = await ls.get(MUTED_KEY);
+      if (raw) this.mutedIds = new Set(JSON.parse(raw) as string[]);
+    } catch {
+      // stale preference — ignore
+    }
     // Subscribe to sync deltas — apply server changes into the live list.
     onPulled(({ projects }) => {
       if (!projects.length) return;

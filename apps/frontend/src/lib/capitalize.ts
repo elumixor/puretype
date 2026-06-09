@@ -12,7 +12,9 @@ export function toCapMode(v: string | undefined | null): CapMode {
 
 function capFirst(s: string): string {
   if (!s) return s;
-  return s[0].toUpperCase() + s.slice(1).toLowerCase();
+  // Uppercase the first letter only; keep the rest so intentional casing like
+  // "PureType" survives (was rendering "Puretype").
+  return s[0].toUpperCase() + s.slice(1);
 }
 
 export function applyCap(name: string, mode: CapMode, atSentenceStart: boolean): string {

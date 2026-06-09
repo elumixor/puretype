@@ -1,27 +1,34 @@
 import type { Project } from "$lib/api";
+import { tapMedium } from "$lib/haptics";
 import { projects } from "$lib/projects.svelte";
 import { chipDrag } from "./chip-drag.svelte";
 
 const MOVE_THRESHOLD = 6;
 const LONG_PRESS_MS = 450;
 
-// Chip pointerdown stays tentative until it commits to one of:
-//   - drag    (pointer moved > MOVE_THRESHOLD before LONG_PRESS_MS)
-//   - menu    (held still for LONG_PRESS_MS)
-//   - filter  (released before either of the above fired)
-export function makeChipPressHandler(onOpenMenu: (p: Project, x: number, y: number) => void) {
+// Chip gesture (mirrors the task row gesture):
+//   - tap (quick release, no move)     → toggle the project's task visibility
+//   - move before the long-press fires → it's a horizontal bar scroll; bail
+//   - hold still LONG_PRESS_MS         → open the context menu
+//   - move *after* the menu opened     → close the menu and start a reorder
+export function makeChipPressHandler(
+  onOpenMenu: (p: Project, x: number, y: number) => void,
+  onCloseMenu: () => void,
+) {
   return (e: PointerEvent, p: Project) => {
     if (e.button !== undefined && e.button !== 0) return;
     const startX = e.clientX;
     const startY = e.clientY;
-    let activated = false;
-    let down = true;
     const chip = e.currentTarget as HTMLElement;
+    let longPressed = false;
+    let dragging = false;
+    let bailed = false; // early move → treat as a scroll, do nothing
+    let down = true;
+
     const timer = setTimeout(() => {
-      // pressDown false means the browser cancelled the gesture (e.g. native
-      // scroll committed) — we must not pop the menu.
-      if (activated || !down) return;
-      activated = true;
+      if (bailed || !down) return;
+      longPressed = true;
+      tapMedium();
       onOpenMenu(p, startX, startY);
     }, LONG_PRESS_MS);
 
@@ -32,19 +39,32 @@ export function makeChipPressHandler(onOpenMenu: (p: Project, x: number, y: numb
       clearTimeout(timer);
       down = false;
     };
+
     const onMove = (me: PointerEvent) => {
-      if (activated) return;
+      if (dragging) return;
       if (Math.hypot(me.clientX - startX, me.clientY - startY) < MOVE_THRESHOLD) return;
-      activated = true;
+      if (!longPressed) {
+        // Moved before the long-press → let the bar scroll, drop the gesture.
+        bailed = true;
+        cleanup();
+        return;
+      }
+      // Long-pressed, then moved → reorder. Swap the menu for a drag.
+      dragging = true;
       cleanup();
+      onCloseMenu();
       chipDrag.start(p, me.clientX, me.clientY, chip);
     };
+
     const onUp = () => {
-      const wasActivated = activated;
+      const tapped = !longPressed && !bailed && !dragging;
       cleanup();
-      if (!wasActivated) projects.toggleFilter(p.id);
+      // Quick tap toggles this project's task visibility. After a long-press the
+      // menu stays open; after a drag the reorder already committed.
+      if (tapped) projects.toggleMuted(p.id);
     };
     const onCancel = () => cleanup();
+
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancel);

@@ -49,7 +49,10 @@
     });
   });
 
-  const onChipPointerDown = makeChipPressHandler((project, x, y) => (menu = { project, x, y }));
+  const onChipPointerDown = makeChipPressHandler(
+    (project, x, y) => (menu = { project, x, y }),
+    () => (menu = null),
+  );
   const onChipContextMenu = (e: MouseEvent, project: Project) => {
     e.preventDefault();
     menu = { project, x: e.clientX, y: e.clientY };
@@ -79,6 +82,7 @@
   >
     {#each visibleNoDrag as p, i (p.id)}
       {@const activeFilter = projects.filterId === p.id}
+      {@const muted = projects.isMuted(p.id)}
       {#if chipDrag.draggingId && chipDrag.dropIndex === i}
         <div
           class="shrink-0 rounded-full border border-dashed border-[var(--color-accent)]/50 bg-[var(--color-accent-dim)]/30"
@@ -93,12 +97,14 @@
         onpointerdown={(e) => onChipPointerDown(e, p)}
         class="flex items-center rounded-full border transition-colors shrink-0 select-none
           {p.hidden ? 'opacity-50' : ''}
+          {muted ? 'opacity-45' : ''}
           {activeFilter
           ? 'bg-[var(--color-accent-dim)] border-[var(--color-accent)]/40'
           : 'bg-[var(--color-surface)] border-[var(--color-border)]'}"
       >
         <div
           class="flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 text-[12px] font-medium
+            {muted ? 'line-through' : ''}
             {activeFilter ? 'text-[var(--color-accent)]' : 'text-[var(--color-ink-2)]'}"
         >
           <ProjectAvatar project={p} size={18} />

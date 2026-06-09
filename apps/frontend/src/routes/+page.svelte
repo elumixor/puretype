@@ -39,9 +39,12 @@
   let hiddenBuckets = $state(defaultHidden());
 
   const matchesFilter = (t: Task) => {
+    const pids = projectIds(t.text);
+    // Tapping a chip mutes a project → hide its tasks.
+    if (pids.some((id) => projects.isMuted(id))) return false;
     if (!projects.filterId) return true;
     const wanted = projects.descendantIds(projects.filterId);
-    return projectIds(t.text).some((id) => wanted.has(id));
+    return pids.some((id) => wanted.has(id));
   };
   const visibleTasks = $derived(tasks.filter(matchesFilter));
 
