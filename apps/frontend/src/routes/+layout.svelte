@@ -10,4 +10,10 @@
   let { children } = $props();
 </script>
 
-{@render children()}
+<!-- App-wide: text isn't selectable (native iOS feel) so a long-press opens our
+  menus instead of dragging up the loupe on tasks, project chips, or settings.
+  Inputs and the rich editor opt back in via app.css. `display:contents` keeps
+  the wrapper out of layout so fixed/viewport positioning is unaffected. -->
+<div class="no-touch-select" style="display: contents">
+  {@render children()}
+</div>

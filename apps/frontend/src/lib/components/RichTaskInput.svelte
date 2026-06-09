@@ -171,8 +171,8 @@
     contenteditable="true"
     data-placeholder={placeholder}
     class={flush
-      ? "rich-input text-[13px] font-light tracking-wide leading-[21px] min-h-[21px] focus:outline-none"
-      : `rich-input min-h-[46px] py-3 pl-4 ${endSlot ? "pr-11" : "pr-4"} rounded-2xl bg-[var(--color-surface)] text-[13px] font-light tracking-wide leading-[1.7] border border-[var(--color-border)] focus:border-[var(--color-accent)] focus:bg-[var(--color-surface-2)] focus:outline-none transition-all duration-300`}
+      ? "rich-input text-[15px] font-light tracking-wide leading-[23px] min-h-[23px] focus:outline-none"
+      : `rich-input min-h-[48px] py-3 pl-4 ${endSlot ? "pr-11" : "pr-4"} rounded-2xl bg-[var(--color-surface)] text-[15px] font-light tracking-wide leading-[1.7] border border-[var(--color-border)] focus:border-[var(--color-accent)] focus:bg-[var(--color-surface-2)] focus:outline-none transition-all duration-300`}
     oninput={onInput}
     onkeydown={onKeydown}
     oncopy={(e) => clipboard?.onCopy(e)}

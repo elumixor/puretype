@@ -53,6 +53,21 @@
   user-select: none;
 }
 
+/* Form fields and the rich editor stay selectable even inside a no-touch-select
+   container, so the keyboard caret works and long-press in edit mode selects
+   the word. Declared after so it wins on equal specificity. */
+input,
+textarea,
+select,
+[contenteditable="true"],
+[contenteditable=""],
+.rich-input,
+.rich-input * {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* ── Light theme ──────────────────────────────────────────────── */
 html.light {
   --color-bg: oklch(97% 0.006 280);
@@ -260,7 +275,7 @@ html.dnd-dragging * {
   padding: 1px 7px 1px 5px;
   margin: 0 1px;
   border-radius: 7px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1.45;
   white-space: nowrap;
