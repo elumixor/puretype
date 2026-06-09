@@ -11,9 +11,12 @@
     signInWithApple,
     signInWithGoogle,
   } from "$lib/auth/social-login";
+  import Paywall from "$lib/components/Paywall.svelte";
   import SignInButtons from "$lib/components/SignInButtons.svelte";
   import UserAvatar from "$lib/components/UserAvatar.svelte";
+  import { entitlement } from "$lib/capabilities.svelte";
   import { projects } from "$lib/projects.svelte";
+  import { refreshEntitlement, storeAvailable } from "$lib/storekit";
   import { BUCKET_LABEL, settings } from "$lib/settings.svelte";
   import { tasks as tasksStore } from "$lib/tasks.svelte";
   import type { Bucket } from "$lib/tokens";
@@ -36,12 +39,14 @@
   let deleting = $state(false);
   let error = $state<string | null>(null);
   let dark = $state(true);
+  let paywallOpen = $state(false);
 
   onMount(async () => {
     dark = localStorage.getItem("theme") !== "light";
     void settings.boot();
     void tasksStore.boot();
     void projects.boot();
+    void refreshEntitlement();
     await initSocialLogin();
   });
 
@@ -124,6 +129,31 @@
     </button>
   </section>
 
+  {#if storeAvailable}
+    <section class="mb-8">
+      <h2 class="text-[11px] font-mono tracking-widest text-[var(--color-ink-3)] uppercase mb-3">Subscription</h2>
+      {#if entitlement.hasPro}
+        <div
+          class="flex items-center justify-between h-14 px-4 rounded-2xl bg-[var(--color-accent-dim)]
+            border border-[var(--color-accent)]/30"
+        >
+          <span class="text-sm font-semibold text-[var(--color-accent)]">PureType Pro</span>
+          <span class="text-xs text-[var(--color-ink-2)]">Active</span>
+        </div>
+      {:else}
+        <button
+          type="button"
+          onclick={() => (paywallOpen = true)}
+          class="w-full flex items-center justify-between h-14 px-4 rounded-2xl
+            bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-[0.99] transition-transform"
+        >
+          <span class="text-sm font-semibold">Upgrade to Pro</span>
+          <span class="text-xs opacity-80">Voice + AI</span>
+        </button>
+      {/if}
+    </section>
+  {/if}
+
   <section class="mb-8">
     <h2 class="text-[11px] font-mono tracking-widest text-[var(--color-ink-3)] uppercase mb-3">New tasks land in</h2>
     <div class="grid grid-cols-3 gap-2">
@@ -205,3 +235,7 @@
     </section>
   {/if}
 </main>
+
+{#if paywallOpen}
+  <Paywall onClose={() => (paywallOpen = false)} />
+{/if}
