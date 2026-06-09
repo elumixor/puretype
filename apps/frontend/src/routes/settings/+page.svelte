@@ -12,11 +12,22 @@
     signInWithGoogle,
   } from "$lib/auth/social-login";
   import SignInButtons from "$lib/components/SignInButtons.svelte";
+  import UserAvatar from "$lib/components/UserAvatar.svelte";
+  import { projects } from "$lib/projects.svelte";
   import { BUCKET_LABEL, settings } from "$lib/settings.svelte";
+  import { tasks as tasksStore } from "$lib/tasks.svelte";
   import type { Bucket } from "$lib/tokens";
   import { user } from "$lib/user.svelte";
 
   const BUCKETS: Bucket[] = ["today", "week", "later"];
+
+  const displayName = $derived(me?.name || me?.email || "You");
+  const completed = $derived(tasksStore.list.filter((t) => t.completed).length);
+  const active = $derived(tasksStore.list.filter((t) => !t.completed).length);
+  const projectCount = $derived(projects.list.length);
+  const memberSince = $derived(
+    me?.createdAt ? new Date(me.createdAt).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : null,
+  );
 
   const me = $derived(user.me);
   const anonymous = $derived(me?.anonymous ?? true);
@@ -29,6 +40,8 @@
   onMount(async () => {
     dark = localStorage.getItem("theme") !== "light";
     void settings.boot();
+    void tasksStore.boot();
+    void projects.boot();
     await initSocialLogin();
   });
 
@@ -142,7 +155,24 @@
       <SignInButtons {signingIn} onSignIn={handleSignIn} />
       {#if error}<p class="text-sm text-red-500 mt-4">{error}</p>{/if}
     {:else}
-      <p class="text-sm text-[var(--color-ink-2)] mb-4 truncate">{me?.email}</p>
+      <div class="flex items-center gap-3 mb-5">
+        <UserAvatar name={displayName} size={52} />
+        <div class="min-w-0">
+          <p class="text-[15px] font-semibold truncate">{displayName}</p>
+          {#if me?.name && me?.email}<p class="text-xs text-[var(--color-ink-3)] truncate">{me.email}</p>{/if}
+          {#if memberSince}<p class="text-xs text-[var(--color-ink-3)]">Since {memberSince}</p>{/if}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2 mb-5">
+        {#each [{ n: completed, l: "Completed" }, { n: active, l: "Active" }, { n: projectCount, l: "Projects" }] as s (s.l)}
+          <div class="rounded-2xl bg-[var(--color-surface-2)] py-3 text-center">
+            <div class="text-xl font-semibold text-[var(--color-ink)]">{s.n}</div>
+            <div class="text-[11px] text-[var(--color-ink-3)] mt-0.5">{s.l}</div>
+          </div>
+        {/each}
+      </div>
+
       <button
         onclick={handleSignOut}
         class="flex items-center justify-center gap-2 w-full h-12 rounded-2xl

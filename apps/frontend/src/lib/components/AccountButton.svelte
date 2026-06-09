@@ -13,9 +13,11 @@
   import { portal } from "$lib/portal";
   import { user } from "$lib/user.svelte";
   import SignInButtons from "./SignInButtons.svelte";
+  import UserAvatar from "./UserAvatar.svelte";
 
   const me = $derived(user.me);
   const anonymous = $derived(me?.anonymous ?? true);
+  const displayName = $derived(me?.name || me?.email || "You");
 
   let open = $state(false);
   let signingIn = $state(false);
@@ -61,9 +63,13 @@
   onclick={() => (open = true)}
   aria-label={anonymous ? "Sign in" : "Account"}
   class="w-11 h-11 rounded-2xl bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)]
-    flex items-center justify-center transition-all duration-300"
+    flex items-center justify-center transition-all duration-300 overflow-hidden"
 >
-  <UserIcon size={17} class="text-[var(--color-ink-2)]" />
+  {#if anonymous}
+    <UserIcon size={17} class="text-[var(--color-ink-2)]" />
+  {:else}
+    <UserAvatar name={displayName} size={32} />
+  {/if}
 </button>
 
 <svelte:window onkeydown={(e) => open && e.key === "Escape" && (open = false)} />
@@ -105,8 +111,13 @@
         <SignInButtons {signingIn} onSignIn={handleSignIn} />
         {#if error}<p class="text-sm text-red-500 mt-4">{error}</p>{/if}
       {:else}
-        <h2 class="text-lg font-semibold mb-1">Signed in</h2>
-        <p class="text-sm text-[var(--color-ink-2)] mb-5 pr-6 truncate">{me?.email}</p>
+        <div class="flex items-center gap-3 mb-5 pr-6">
+          <UserAvatar name={displayName} size={48} />
+          <div class="min-w-0">
+            <h2 class="text-base font-semibold truncate">{displayName}</h2>
+            {#if me?.name && me?.email}<p class="text-xs text-[var(--color-ink-3)] truncate">{me.email}</p>{/if}
+          </div>
+        </div>
         <button
           onclick={handleSignOut}
           class="flex items-center justify-center gap-2 w-full h-12 rounded-2xl

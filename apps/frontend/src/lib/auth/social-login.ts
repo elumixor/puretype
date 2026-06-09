@@ -1,6 +1,9 @@
 import { Capacitor } from "@capacitor/core";
 import { SocialLogin } from "@capgo/capacitor-social-login";
 import { api } from "$lib/api/client";
+import { ls } from "$lib/storage";
+
+const AVATAR_KEY = "avatarUrl";
 
 export async function initSocialLogin(): Promise<void> {
   const googleWeb = import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID as string | undefined;
@@ -41,6 +44,10 @@ export async function signInWithGoogle() {
   const response = result.result;
   if (response.responseType !== "online") throw new Error("Expected online login response");
   if (!response.idToken) throw new Error("No ID token returned from Google");
+  // Stash the Google profile photo locally for the account avatar (#40).
+  const imageUrl = (response.profile as { imageUrl?: string } | undefined)?.imageUrl;
+  if (imageUrl) await ls.set(AVATAR_KEY, imageUrl);
+  else await ls.remove(AVATAR_KEY);
   return api.auth.google.$post({ idToken: response.idToken });
 }
 
@@ -54,6 +61,7 @@ export async function signInWithApple() {
 }
 
 export async function clearSocialSessions() {
+  await ls.remove(AVATAR_KEY);
   await SocialLogin.logout({ provider: "google" }).catch(() => {});
   await SocialLogin.logout({ provider: "apple" }).catch(() => {});
 }
