@@ -1,10 +1,12 @@
 import type { Bucket, Task } from "$lib/api";
+import { enrichWithAI } from "$lib/ai-parse";
 import { archivePop, isArchived } from "$lib/archive.svelte";
+import { features } from "$lib/capabilities.svelte";
 import { selection as multi } from "$lib/selection.svelte";
 import { settings } from "$lib/settings.svelte";
 import { tasks as tasksStore } from "$lib/tasks.svelte";
 import { toasts } from "$lib/toast.svelte";
-import { bucketForDate, extractFields } from "$lib/tokens";
+import { bucketForDate, extractFields, TOKEN_RE } from "$lib/tokens";
 
 // Per-task monotonic sequence so rapid double-taps coalesce safely.
 const toggleSeq = new Map<string, number>();
@@ -17,6 +19,10 @@ export async function addTask(text: string) {
   const bucket = fields.startTime ? bucketForDate(new Date(fields.startTime)) : settings.defaultBucket;
   const task = await tasksStore.create({ text, bucket, ...fields });
   tasksStore.focus(task.id); // scroll the new row into view + flash (#42)
+  // iOS + paid: enrich plain text (no manually-typed tokens) with AI-parsed
+  // project/date/duration in the background (#47).
+  TOKEN_RE.lastIndex = 0;
+  if (features.ai && !TOKEN_RE.test(text)) void enrichWithAI(task.id, text);
   return task;
 }
 
