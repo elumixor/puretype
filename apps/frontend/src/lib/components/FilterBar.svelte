@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { Eye, EyeOff, Settings2, X } from "lucide-svelte";
-  import { untrack } from "svelte";
+  import { Eye, EyeOff, Plus, Settings2, X } from "lucide-svelte";
+  import { tick, untrack } from "svelte";
   import type { Project } from "$lib/api";
   import { applyCap, toCapMode } from "$lib/capitalize";
   import { portal } from "$lib/portal";
@@ -14,6 +14,25 @@
   let editing = $state<Project | null>(null);
   let barEl: HTMLDivElement | undefined = $state();
   let menu = $state<{ project: Project; x: number; y: number } | null>(null);
+
+  // Inline "New project" flow — gives a visible, discoverable way to create a
+  // project (you can also still type "@name" in the composer). (#44)
+  let creating = $state(false);
+  let newName = $state("");
+  let newNameEl: HTMLInputElement | undefined = $state();
+
+  function openCreate() {
+    creating = true;
+    newName = "";
+    void tick().then(() => newNameEl?.focus());
+  }
+  async function submitCreate() {
+    const name = newName.trim();
+    creating = false;
+    if (!name) return;
+    const p = await projects.create(name);
+    projects.toggleFilter(p.id);
+  }
 
   $effect(() => chipDrag.bindBar(barEl ?? null));
 
@@ -36,6 +55,18 @@
     menu = { project, x: e.clientX, y: e.clientY };
   };
 </script>
+
+{#snippet addButton()}
+  <button
+    onclick={openCreate}
+    class="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full border border-dashed shrink-0
+      border-[var(--color-border-hover)] text-[12px] font-medium text-[var(--color-ink-3)]
+      hover:text-[var(--color-accent)] hover:border-[var(--color-accent)]/50 transition-colors"
+  >
+    <Plus size={13} />
+    New project
+  </button>
+{/snippet}
 
 {#if projects.list.length > 0}
   {@const shown = projects.showHidden ? projects.list : projects.visible}
@@ -119,6 +150,57 @@
         {/if}
       </button>
     {/if}
+
+    {@render addButton()}
+  </div>
+{:else}
+  <!-- No projects yet — still surface the create affordance so it's findable. -->
+  <div class="flex items-center -mx-1 px-1">
+    {@render addButton()}
+  </div>
+{/if}
+
+{#if creating}
+  <div use:portal>
+    <button
+      aria-label="Cancel"
+      class="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm animate-fade-in"
+      onclick={() => (creating = false)}
+    ></button>
+    <div
+      class="fixed left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 z-[61] w-[min(92vw,360px)]
+        p-5 rounded-3xl bg-[var(--color-surface-2)] border border-[var(--color-border)]
+        shadow-2xl shadow-black/50 animate-scale-in"
+    >
+      <h2 class="text-sm font-semibold mb-3">New project</h2>
+      <input
+        bind:this={newNameEl}
+        bind:value={newName}
+        placeholder="Project name"
+        onkeydown={(e) => {
+          if (e.key === "Enter") submitCreate();
+          else if (e.key === "Escape") creating = false;
+        }}
+        class="w-full h-11 px-3 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)]
+          text-sm text-[var(--color-ink)] focus:border-[var(--color-accent)] focus:outline-none"
+      />
+      <div class="flex justify-end gap-2 mt-4">
+        <button
+          onclick={() => (creating = false)}
+          class="px-4 h-10 rounded-xl text-sm text-[var(--color-ink-2)] hover:bg-[var(--color-surface-3)] transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onclick={submitCreate}
+          disabled={!newName.trim()}
+          class="px-4 h-10 rounded-xl text-sm font-medium bg-[var(--color-accent)] text-[var(--color-bg)]
+            disabled:opacity-50 transition-opacity"
+        >
+          Create
+        </button>
+      </div>
+    </div>
   </div>
 {/if}
 

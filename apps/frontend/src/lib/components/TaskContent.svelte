@@ -39,12 +39,12 @@
       </button>
     {:else if seg.kind === "time"}
       <span class="pill pill-time">
-        <Clock size={11} strokeWidth={2.5} />
+        <Clock size={12} strokeWidth={2.5} />
         {fmtDateTime(seg.date, seg.hasTime, startFlags[i])}
       </span>
     {:else if seg.kind === "dur"}
       <span class="pill pill-dur">
-        <Hourglass size={11} strokeWidth={2.5} />
+        <Hourglass size={12} strokeWidth={2.5} />
         {fmtDuration(seg.minutes)}
       </span>
     {:else if seg.kind === "place"}
@@ -56,7 +56,7 @@
         onclick={(e) => e.stopPropagation()}
         onpointerdown={(e) => e.stopPropagation()}
       >
-        <MapPin size={11} strokeWidth={2.5} />
+        <MapPin size={12} strokeWidth={2.5} />
         <span class="pill-place-name" title={seg.name}>{seg.name}</span>
       </a>
     {:else if seg.kind === "link"}
@@ -68,7 +68,7 @@
         onclick={(e) => e.stopPropagation()}
         onpointerdown={(e) => e.stopPropagation()}
       >
-        <Link2 size={11} strokeWidth={2.5} />
+        <Link2 size={12} strokeWidth={2.5} />
         {fmtLinkLabel(seg.url)}
       </a>
     {/if}

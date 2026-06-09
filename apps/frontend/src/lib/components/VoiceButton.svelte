@@ -157,10 +157,10 @@
       : 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] transition-all duration-300 hover:shadow-lg hover:shadow-[var(--color-accent-glow)] active:scale-95'}"
 >
   {#if recording}
-    <Mic size={compact ? 14 : 18} class="text-white" />
+    <Mic size={compact ? 16 : 18} class="text-white" />
   {:else if empty}
-    <Mic size={compact ? 14 : 18} class="text-[var(--color-bg)]" />
+    <Mic size={compact ? 16 : 18} class="text-[var(--color-bg)]" />
   {:else}
-    <Plus size={compact ? 14 : 18} strokeWidth={2.5} class="text-[var(--color-bg)]" />
+    <Plus size={compact ? 16 : 18} strokeWidth={2.5} class="text-[var(--color-bg)]" />
   {/if}
 </button>
