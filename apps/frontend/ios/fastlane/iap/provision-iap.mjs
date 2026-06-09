@@ -127,6 +127,36 @@ async function ensureLocalization(subId, t) {
   console.log(`  created localization en-US`);
 }
 
+async function ensureAvailability(subId) {
+  try {
+    const cur = await api("GET", `/v1/subscriptions/${subId}/subscriptionAvailability`);
+    if (cur.data) {
+      console.log(`  availability exists`);
+      return;
+    }
+  } catch {
+    // 404 → needs creating
+  }
+  let territories = [];
+  let url = `/v1/territories?limit=200`;
+  while (url) {
+    const page = await api("GET", url);
+    territories = territories.concat(page.data ?? []);
+    url = page.links?.next ?? null;
+  }
+  await api("POST", "/v1/subscriptionAvailabilities", {
+    data: {
+      type: "subscriptionAvailabilities",
+      attributes: { availableInNewTerritories: true },
+      relationships: {
+        subscription: { data: { type: "subscriptions", id: subId } },
+        availableTerritories: { data: territories.map((t) => ({ type: "territories", id: t.id })) },
+      },
+    },
+  });
+  console.log(`  set availability in ${territories.length} territories`);
+}
+
 async function ensurePrice(subId, t) {
   const prices = await api("GET", `/v1/subscriptions/${subId}/prices?limit=50`);
   if (prices.data?.length) {
@@ -197,9 +227,9 @@ async function main() {
     console.log(`\n• ${key}: ${t.productId}`);
     const subId = await getOrCreateSubscription(groupId, t);
     await ensureLocalization(subId, t);
-    // Pricing + trial are non-fatal: Apple's pricing endpoint is flaky and can
-    // be finished in the ASC UI in seconds. Don't let it block creating both
-    // products + localizations in one run.
+    // Availability must exist before pricing/trial (Apple: "set up availabilities
+    // first"). Pricing/trial are non-fatal so one run still creates both products.
+    await ensureAvailability(subId).catch((e) => console.warn(`  ⚠ availability not set: ${e.message}`));
     await ensurePrice(subId, t).catch((e) => console.warn(`  ⚠ price not set (do it in ASC): ${e.message}`));
     await ensureTrial(subId, t).catch((e) => console.warn(`  ⚠ trial not set (do it in ASC): ${e.message}`));
   }
