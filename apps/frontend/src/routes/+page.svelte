@@ -6,6 +6,7 @@
   import BoxSelect from "$lib/components/BoxSelect.svelte";
   import BucketSection from "$lib/components/BucketSection.svelte";
   import DragGhost from "$lib/components/DragGhost.svelte";
+  import Onboarding from "$lib/components/Onboarding.svelte";
   import ProjectPicker from "$lib/components/ProjectPicker.svelte";
   import type RichTaskInput from "$lib/components/RichTaskInput.svelte";
   import Toast from "$lib/components/Toast.svelte";
@@ -164,6 +165,8 @@
 {/if}
 
 <BottomComposer bind:input={addInput} bind:bubble={voiceBubbleEl} onSubmit={submitNewTask} {onVoiceRecorded} />
+
+<Onboarding show={tasks.length === 0} />
 
 <BoxSelect />
 <Toast />
