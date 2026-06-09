@@ -13,7 +13,18 @@ type MaybeDeleted = Task & { deletedAt?: string | null };
 
 class TasksStore {
   list = $state<Task[]>([]);
+  // Id of the most recently created task — TaskItem scrolls it into view and
+  // flashes it once, then clears this (#42).
+  focusId = $state<string | null>(null);
   private booted = false;
+
+  focus(id: string) {
+    this.focusId = id;
+  }
+
+  clearFocus(id: string) {
+    if (this.focusId === id) this.focusId = null;
+  }
 
   get byBucket(): Record<Bucket, Task[]> {
     const out: Record<Bucket, Task[]> = { today: [], week: [], later: [] };

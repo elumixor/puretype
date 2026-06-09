@@ -1,15 +1,24 @@
 import type { Bucket, Task } from "$lib/api";
 import { archivePop, isArchived } from "$lib/archive.svelte";
 import { selection as multi } from "$lib/selection.svelte";
+import { settings } from "$lib/settings.svelte";
 import { tasks as tasksStore } from "$lib/tasks.svelte";
 import { toasts } from "$lib/toast.svelte";
-import { extractFields } from "$lib/tokens";
+import { bucketForDate, extractFields } from "$lib/tokens";
 
 // Per-task monotonic sequence so rapid double-taps coalesce safely.
 const toggleSeq = new Map<string, number>();
 const confirmedToggle = new Map<string, boolean>();
 
-export const addTask = (text: string) => tasksStore.create({ text, bucket: "today", ...extractFields(text) });
+export async function addTask(text: string) {
+  const fields = extractFields(text);
+  // A typed date token wins; otherwise fall back to the user's default-bucket
+  // preference. Keeps "@tomorrow" out of Today (#46) and honours the setting (#43).
+  const bucket = fields.startTime ? bucketForDate(new Date(fields.startTime)) : settings.defaultBucket;
+  const task = await tasksStore.create({ text, bucket, ...fields });
+  tasksStore.focus(task.id); // scroll the new row into view + flash (#42)
+  return task;
+}
 
 export async function toggleTask(task: Task) {
   const id = task.id;

@@ -1,7 +1,7 @@
 import type { Bucket, Task } from "$lib/api";
 import { isArchived } from "$lib/archive.svelte";
 import { tasks as tasksStore } from "$lib/tasks.svelte";
-import type { DisplayBucket } from "$lib/tokens";
+import { type DisplayBucket, displayBucket } from "$lib/tokens";
 
 // Map a list id ("bucket:today" etc.) to the stored bucket value. Dropping
 // onto Overdue moves the task back into "today" — Overdue is derived, so
@@ -55,8 +55,16 @@ export async function commitDrop({ taskIds, to, index }: DropCommit, tasks: Task
 
   visualPeers.splice(at, 0, ...dragged);
 
+  const nowIso = new Date().toISOString();
   for (const t of dragged) {
-    if (t.bucket !== targetBucket) await tasksStore.update(t.id, { bucket: targetBucket });
+    if (t.bucket !== targetBucket) {
+      await tasksStore.update(t.id, { bucket: targetBucket });
+    } else if (targetBucket !== "later" && displayBucket(t) === "overdue") {
+      // Same stored bucket, but the row is showing as Overdue (its scheduledAt
+      // is stale). Dropping it back into Today/This-week must re-stamp
+      // scheduledAt so it leaves the Overdue section (#49).
+      await tasksStore.update(t.id, { scheduledAt: nowIso });
+    }
   }
 
   // Only reorder pending; done sorts by updatedAt.

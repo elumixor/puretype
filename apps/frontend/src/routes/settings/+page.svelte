@@ -12,7 +12,11 @@
     signInWithGoogle,
   } from "$lib/auth/social-login";
   import SignInButtons from "$lib/components/SignInButtons.svelte";
+  import { BUCKET_LABEL, settings } from "$lib/settings.svelte";
+  import type { Bucket } from "$lib/tokens";
   import { user } from "$lib/user.svelte";
+
+  const BUCKETS: Bucket[] = ["today", "week", "later"];
 
   const me = $derived(user.me);
   const anonymous = $derived(me?.anonymous ?? true);
@@ -24,6 +28,7 @@
 
   onMount(async () => {
     dark = localStorage.getItem("theme") !== "light";
+    void settings.boot();
     await initSocialLogin();
   });
 
@@ -104,6 +109,27 @@
         <Sun size={18} class="text-[var(--color-ink-2)]" />
       {/if}
     </button>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="text-[11px] font-mono tracking-widest text-[var(--color-ink-3)] uppercase mb-3">New tasks land in</h2>
+    <div class="grid grid-cols-3 gap-2">
+      {#each BUCKETS as b (b)}
+        <button
+          type="button"
+          onclick={() => settings.setDefaultBucket(b)}
+          class="h-12 rounded-2xl text-sm font-medium transition-colors
+            {settings.defaultBucket === b
+            ? 'bg-[var(--color-accent)] text-[var(--color-bg)]'
+            : 'bg-[var(--color-surface-2)] text-[var(--color-ink-2)] hover:bg-[var(--color-surface-3)]'}"
+        >
+          {BUCKET_LABEL[b]}
+        </button>
+      {/each}
+    </div>
+    <p class="text-[0.7rem] text-[var(--color-ink-3)] mt-2 leading-relaxed">
+      Where a new task goes when you don't type a date. Typing a date (like “@tomorrow”) always wins.
+    </p>
   </section>
 
   <section>

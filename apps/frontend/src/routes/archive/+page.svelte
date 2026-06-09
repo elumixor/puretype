@@ -163,6 +163,10 @@
     </span>
   </header>
 
+  <p class="text-[12px] font-light leading-relaxed text-[var(--color-ink-3)] mb-6 -mt-2">
+    Done tasks move here on their own once the day rolls over. Finishing something from Overdue archives it right away.
+  </p>
+
   {#if groups.length === 0}
     <p class="text-[13px] font-light text-[var(--color-ink-3)] mt-12 text-center">
       Nothing archived yet.

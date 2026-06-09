@@ -24,6 +24,7 @@
     toggleTask,
   } from "$lib/home/task-handlers";
   import { projects } from "$lib/projects.svelte";
+  import { settings } from "$lib/settings.svelte";
   import { ls } from "$lib/storage";
   import { tasks as tasksStore } from "$lib/tasks.svelte";
   import { displayBucket, projectIds } from "$lib/tokens";
@@ -68,6 +69,7 @@
   onMount(() => {
     void tasksStore.boot();
     void projects.boot();
+    void settings.boot();
     void loadHiddenBuckets();
     dnd.onDrop = (e) => commitDrop(e, tasks);
     const onKey = buildGlobalKeydown({

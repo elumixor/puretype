@@ -3,6 +3,7 @@
   import { dnd } from "$lib/dnd.svelte";
   import { notifySuccess, notifyWarning, tapLight, tapMedium } from "$lib/haptics";
   import { selection as multi } from "$lib/selection.svelte";
+  import { tasks as tasksStore } from "$lib/tasks.svelte";
   import { stripTokens } from "$lib/tokens";
   import RichTaskInput from "./RichTaskInput.svelte";
   import ConfirmDelete from "./task-item/ConfirmDelete.svelte";
@@ -45,6 +46,18 @@
   let mounted = $state(false);
   $effect(() => {
     mounted = true;
+  });
+
+  // Just-created task: scroll it into view and flash once, then release the
+  // flag so it doesn't re-trigger on later renders (#42).
+  let flash = $state(false);
+  $effect(() => {
+    if (tasksStore.focusId !== task.id || !el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    flash = true;
+    const t = setTimeout(() => (flash = false), 900);
+    tasksStore.clearFocus(task.id);
+    return () => clearTimeout(t);
   });
 
   let editing = $state(false);
@@ -149,8 +162,8 @@
 <div
   bind:this={el}
   data-dnd-item={task.id}
-  class="group relative rounded-2xl
-    {isSelected ? 'outline outline-2 outline-[var(--color-accent)]' : ''}
+  class="group relative rounded-2xl transition-[outline-color] duration-500
+    {isSelected || flash ? 'outline outline-2 outline-[var(--color-accent)]' : 'outline outline-2 outline-transparent'}
     {!mounted ? 'animate-fade-up' : ''}
     {menuOpen ? 'invisible' : ''}"
   style="animation-delay: {index * 50}ms"

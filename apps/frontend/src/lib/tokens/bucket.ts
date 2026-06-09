@@ -19,6 +19,19 @@ function startOfWeek(d: Date): Date {
   return c;
 }
 
+// Choose the storage bucket for a task scheduled on `date`. A past date lands
+// in "today" (so it surfaces as Overdue), the rest of the current calendar week
+// goes to "week", and anything further out is "later". Used when the user types
+// a date token (e.g. "@tomorrow") so the task isn't dumped under Today.
+export function bucketForDate(date: Date, now = new Date()): Bucket {
+  const day = startOfDay(date);
+  const todayStart = startOfDay(now);
+  if (day <= todayStart) return "today"; // today or past (past → shows overdue)
+  const nextWeek = startOfWeek(now);
+  nextWeek.setDate(nextWeek.getDate() + 7); // exclusive: start of next week
+  return day < nextWeek ? "week" : "later";
+}
+
 export function displayBucket(
   task: { bucket: string; scheduledAt: string | Date | null; completed: boolean },
   now = new Date(),
