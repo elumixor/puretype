@@ -26,6 +26,7 @@
   } from "$lib/home/task-handlers";
   import { projects } from "$lib/projects.svelte";
   import { settings } from "$lib/settings.svelte";
+  import { refreshEntitlement } from "$lib/storekit";
   import { ls } from "$lib/storage";
   import { tasks as tasksStore } from "$lib/tasks.svelte";
   import { displayBucket, projectIds } from "$lib/tokens";
@@ -71,6 +72,7 @@
     void tasksStore.boot();
     void projects.boot();
     void settings.boot();
+    void refreshEntitlement();
     void loadHiddenBuckets();
     dnd.onDrop = (e) => commitDrop(e, tasks);
     const onKey = buildGlobalKeydown({

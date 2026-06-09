@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Loader2, Plus } from "lucide-svelte";
+  import { Loader2, Mic, Plus } from "lucide-svelte";
+  import Paywall from "./Paywall.svelte";
   import RichTaskInput from "./RichTaskInput.svelte";
   import VoiceBubble from "./VoiceBubble.svelte";
   import VoiceButton from "./VoiceButton.svelte";
@@ -21,6 +22,7 @@
   // Empty input → show the mic (voice is the primary action); once the user
   // types, the button becomes the send (+) action. Either way it stays active.
   let empty = $state(true);
+  let paywallOpen = $state(false);
 </script>
 
 <div class="fixed bottom-0 inset-x-0 z-40 pointer-events-none">
@@ -52,8 +54,19 @@
               onStart={(s) => voiceTurn.setRecording(s)}
               onStop={() => voiceTurn.setRecording(null)}
             />
+          {:else if features.voiceUpsell && empty}
+            <!-- iOS, not Pro, empty input: mic that opens the paywall. -->
+            <button
+              type="button"
+              onclick={() => (paywallOpen = true)}
+              aria-label="Unlock voice with PureType Pro"
+              class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-[var(--color-accent)]
+                hover:bg-[var(--color-accent-hover)] active:scale-95 transition-all"
+            >
+              <Mic size={16} class="text-[var(--color-bg)]" />
+            </button>
           {:else}
-            <!-- Web: no voice. Plain send button (always active). -->
+            <!-- Web, or typed text: plain send button (always active). -->
             <button
               type="button"
               onclick={() => input?.submit()}
@@ -69,3 +82,7 @@
     </div>
   </div>
 </div>
+
+{#if paywallOpen}
+  <Paywall onClose={() => (paywallOpen = false)} />
+{/if}

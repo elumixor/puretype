@@ -23,10 +23,15 @@ interface StoreKitBridge {
   purchase(opts: { id: string }): Promise<{ entitled: boolean }>;
   restore(): Promise<{ entitled: boolean }>;
   currentEntitlements(): Promise<{ entitled: boolean }>;
+  addListener(event: "entitlementChanged", cb: (data: { entitled: boolean }) => void): void;
 }
 
 const plugin =
   isNative && Capacitor.isPluginAvailable("StoreKit") ? registerPlugin<StoreKitBridge>("StoreKit") : null;
+
+// React to transactions that arrive outside an explicit purchase (renewals,
+// Ask-to-Buy approvals, revocations).
+plugin?.addListener("entitlementChanged", (d) => entitlement.setPro(d.entitled));
 
 // Whether real purchases are possible (native + plugin compiled in). The
 // paywall / upgrade entry points only show when this is true.

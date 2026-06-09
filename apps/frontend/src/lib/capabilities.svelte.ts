@@ -23,20 +23,24 @@ class Entitlement {
 
 export const entitlement = new Entitlement();
 
-// Feature gates. Until the StoreKit bridge lands, voice/AI are gated on the
-// platform only (free on iOS, off on web). #36 tightens these to also require
-// `entitlement.hasPro`.
+// Feature gates. Voice + AI are iOS-only AND require the paid entitlement
+// (7-day free trial). Web never has them.
 export const features = {
   // Payments only exist where StoreKit does.
   get payments(): boolean {
     return isNative;
   },
-  // Voice capture + the voice agent.
+  // Voice capture + the voice agent — Pro only.
   get voice(): boolean {
-    return isNative;
+    return isNative && entitlement.hasPro;
   },
-  // AI natural-language parsing of typed tasks.
+  // AI natural-language parsing of typed tasks — Pro only.
   get ai(): boolean {
-    return isNative;
+    return isNative && entitlement.hasPro;
+  },
+  // iOS, signed in to StoreKit, but not yet Pro → show the upsell (a mic that
+  // opens the paywall instead of recording).
+  get voiceUpsell(): boolean {
+    return isNative && !entitlement.hasPro;
   },
 };
