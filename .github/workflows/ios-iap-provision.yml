@@ -1,0 +1,27 @@
+name: Provision iOS IAP
+
+# Manually-dispatched: creates the PureType Pro subscription products in App
+# Store Connect via the API. Idempotent — safe to re-run. Requires the Paid
+# Applications agreement to be active (Apple blocks IAP creation otherwise).
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-iap-provision
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Provision subscriptions
+        run: node apps/frontend/ios/fastlane/iap/provision-iap.mjs
