@@ -139,7 +139,8 @@ class TasksStore {
         : {};
     const updated = { ...cur, ...patch, ...bucketChange, ...completionChange, updatedAt: now } as Task;
     this.list = this.list.map((t) => (t.id === id ? updated : t));
-    await put("tasks", updated);
+    // `updated` spreads `cur`, a $state proxy; snapshot so IndexedDB can clone it.
+    await put("tasks", $state.snapshot(updated));
     await enqueue({
       kind: "task.update",
       id,
@@ -188,7 +189,7 @@ class TasksStore {
       updated.push(next);
     }
     this.list = Array.from(byId.values());
-    await putMany("tasks", updated);
+    await putMany("tasks", $state.snapshot(updated) as Task[]);
     await enqueue({ kind: "task.reorder", items });
     sync.schedule(0);
   }

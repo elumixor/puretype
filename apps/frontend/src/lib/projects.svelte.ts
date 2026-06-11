@@ -126,12 +126,14 @@ class ProjectsStore {
     const now = new Date().toISOString();
     const updated = { ...cur, ...patch, updatedAt: now } as Project;
     this.list = this.list.map((p) => (p.id === id ? updated : p));
-    await put("projects", updated);
+    // `updated` spreads `cur`, a $state proxy, so nested fields (parentIds) are
+    // proxy arrays that IndexedDB can't structured-clone. Snapshot before put.
+    await put("projects", $state.snapshot(updated));
     await enqueue({
       kind: "project.update",
       id,
       clientUpdatedAt: cur.updatedAt as unknown as string,
-      patch: patch as never,
+      patch: $state.snapshot(patch) as never,
     });
     sync.schedule(0);
     return updated;
@@ -188,7 +190,7 @@ class ProjectsStore {
     }
     for (const p of this.list) if (!ids.includes(p.id)) reordered.push(p);
     this.list = reordered;
-    await putMany("projects", reordered);
+    await putMany("projects", $state.snapshot(reordered) as Project[]);
     for (const p of reordered) {
       await enqueue({
         kind: "project.update",
