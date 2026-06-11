@@ -12,6 +12,11 @@
 
   let { project, onClose }: { project: Project; onClose: () => void } = $props();
 
+  // Stable reference captured at init. The name input's onblur defers commit()
+  // by 150ms; if the modal closes first, the `project` prop detaches to null and
+  // `project.id` would throw (and the rename would be lost). Use this instead.
+  const edited = project;
+
   /* svelte-ignore state_referenced_locally */
   let tab = $state<"auto" | "emoji" | "image">(project.avatarType as "auto" | "emoji" | "image");
   const live = $derived(projects.byId(project.id) ?? project);
@@ -35,12 +40,12 @@
   // Save name + parents whenever something actually changed.
   async function commit() {
     const name = nameDraft.trim();
-    const cur = projects.byId(project.id) ?? project;
+    const cur = projects.byId(edited.id) ?? edited;
     const patch: { name?: string; parentIds?: string[] } = {};
     if (name && name !== cur.name) patch.name = name;
     const samePar = parentsDraft.length === cur.parentIds.length && parentsDraft.every((id, i) => id === cur.parentIds[i]);
     if (!samePar) patch.parentIds = parentsDraft;
-    if (Object.keys(patch).length) await projects.update(project.id, patch);
+    if (Object.keys(patch).length) await projects.update(edited.id, patch);
   }
 
   function cancel() {
