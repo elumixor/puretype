@@ -33,6 +33,7 @@
   );
 
   const me = $derived(user.me);
+  const resolved = $derived(user.resolved);
   const anonymous = $derived(me?.anonymous ?? true);
 
   let signingIn = $state(false);
@@ -178,7 +179,11 @@
   <section>
     <h2 class="text-[11px] font-mono tracking-widest text-[var(--color-ink-3)] uppercase mb-3">Account</h2>
 
-    {#if anonymous}
+    {#if !resolved}
+      <!-- Loading identity — don't flash the sign-in buttons before we know
+        whether a valid signed-in token is already stored. -->
+      <div class="h-12 rounded-2xl bg-[var(--color-surface-2)] animate-pulse"></div>
+    {:else if anonymous}
       <p class="text-sm text-[var(--color-ink-2)] mb-4">
         Keep your tasks safe across devices. Anything you've added so far carries over.
       </p>

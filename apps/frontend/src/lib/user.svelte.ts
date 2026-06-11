@@ -24,6 +24,16 @@ export const user = {
     void ensureLoaded();
     return me;
   },
+  // True once we actually know who the user is. Until then the UI must not
+  // guess "anonymous" — doing so flashes the sign-in buttons on launch even
+  // when a valid signed-in token is stored. We're resolved when auth has
+  // bootstrapped AND (there's no token, or the user record has loaded).
+  get resolved() {
+    void ensureLoaded();
+    if (!auth.ready) return false;
+    if (auth.isLoggedIn && me === null) return false;
+    return true;
+  },
   async refresh() {
     loadPromise = null;
     me = null;

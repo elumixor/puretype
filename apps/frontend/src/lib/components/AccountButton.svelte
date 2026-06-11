@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { LogOut, User as UserIcon, X } from "lucide-svelte";
+  import { Check, Copy, LogOut, Send, User as UserIcon, X } from "lucide-svelte";
   import { onMount } from "svelte";
   import { fade, scale } from "svelte/transition";
+  import { api } from "$lib/api/client";
   import { auth } from "$lib/auth.svelte";
   import {
     clearSocialSessions,
@@ -16,6 +17,7 @@
   import UserAvatar from "./UserAvatar.svelte";
 
   const me = $derived(user.me);
+  const resolved = $derived(user.resolved);
   const anonymous = $derived(me?.anonymous ?? true);
   const displayName = $derived(me?.name || me?.email || "You");
 
@@ -57,6 +59,47 @@
     await auth.logout();
     location.reload();
   }
+
+  // Telegram linking: fetch a one-time code, show it + a deep link into the bot.
+  let tgCode = $state<string | null>(null);
+  let tgDeepLink = $state<string | null>(null);
+  let tgLoading = $state(false);
+  let tgError = $state<string | null>(null);
+  let tgCopied = $state(false);
+
+  async function linkTelegram() {
+    tgLoading = true;
+    tgError = null;
+    try {
+      const res = await api.telegram.link.$post();
+      tgCode = res.code;
+      tgDeepLink = res.deepLink;
+    } catch (e) {
+      tgError = e instanceof Error ? e.message : "Couldn't create a link code";
+    } finally {
+      tgLoading = false;
+    }
+  }
+
+  async function copyCode() {
+    if (!tgCode) return;
+    try {
+      await navigator.clipboard.writeText(tgCode);
+      tgCopied = true;
+      setTimeout(() => (tgCopied = false), 1500);
+    } catch {
+      /* clipboard blocked — the code is visible anyway */
+    }
+  }
+
+  // Reset the linking UI whenever the modal closes.
+  $effect(() => {
+    if (!open) {
+      tgCode = null;
+      tgDeepLink = null;
+      tgError = null;
+    }
+  });
 </script>
 
 <button
@@ -65,7 +108,10 @@
   class="w-11 h-11 rounded-2xl bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)]
     flex items-center justify-center transition-all duration-300 overflow-hidden"
 >
-  {#if anonymous}
+  {#if !resolved}
+    <!-- Don't guess identity while auth/user are still loading — guessing
+      flashes the wrong icon (and sign-in buttons) on launch. -->
+  {:else if anonymous}
     <UserIcon size={17} class="text-[var(--color-ink-2)]" />
   {:else}
     <UserAvatar name={displayName} size={32} />
@@ -118,6 +164,46 @@
             {#if me?.name && me?.email}<p class="text-xs text-[var(--color-ink-3)] truncate">{me.email}</p>{/if}
           </div>
         </div>
+        {#if tgCode}
+          <div class="mb-3 rounded-2xl bg-[var(--color-surface-2)] p-4 text-center">
+            <p class="text-xs text-[var(--color-ink-2)] mb-2">
+              Send this code to the bot, or tap below to open it.
+            </p>
+            <button
+              onclick={copyCode}
+              class="inline-flex items-center gap-2 font-mono text-xl font-semibold tracking-[0.3em]
+                px-2 hover:opacity-80 transition-opacity"
+              aria-label="Copy code"
+            >
+              {tgCode}
+              {#if tgCopied}<Check size={15} class="text-green-500" />{:else}<Copy size={15} class="text-[var(--color-ink-3)]" />{/if}
+            </button>
+            {#if tgDeepLink}
+              <a
+                href={tgDeepLink}
+                target="_blank"
+                rel="noopener"
+                class="mt-3 flex items-center justify-center gap-2 w-full h-11 rounded-xl
+                  bg-[#229ED9] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                <Send size={15} />
+                Open in Telegram
+              </a>
+            {/if}
+            <p class="mt-2 text-[11px] text-[var(--color-ink-3)]">Code expires in 10 minutes.</p>
+          </div>
+        {:else}
+          <button
+            onclick={linkTelegram}
+            disabled={tgLoading}
+            class="flex items-center justify-center gap-2 w-full h-12 rounded-2xl mb-3
+              bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] transition-colors disabled:opacity-50"
+          >
+            <Send size={17} />
+            <span class="text-sm font-medium">{tgLoading ? "Creating code…" : "Link Telegram"}</span>
+          </button>
+        {/if}
+        {#if tgError}<p class="text-sm text-red-500 mb-3 text-center">{tgError}</p>{/if}
         <button
           onclick={handleSignOut}
           class="flex items-center justify-center gap-2 w-full h-12 rounded-2xl
