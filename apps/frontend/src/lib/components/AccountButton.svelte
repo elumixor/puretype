@@ -109,8 +109,9 @@
     flex items-center justify-center transition-all duration-300 overflow-hidden"
 >
   {#if !resolved}
-    <!-- Don't guess identity while auth/user are still loading — guessing
-      flashes the wrong icon (and sign-in buttons) on launch. -->
+    <!-- Skeleton while auth/user load — guessing identity here flashes the
+      wrong icon (and sign-in buttons) on launch. -->
+    <div class="w-5 h-5 rounded-full bg-[var(--color-surface-3)] animate-pulse"></div>
   {:else if anonymous}
     <UserIcon size={17} class="text-[var(--color-ink-2)]" />
   {:else}
