@@ -19,6 +19,11 @@ resource "vercel_project" "backend" {
 
   lifecycle {
     prevent_destroy = true
+    # The Vercel provider re-sends git_repository on every update via a link
+    # path that fails here ("install the GitHub App") and DROPS the repo link,
+    # breaking auto-deploy. The link is managed out-of-band (dashboard, or
+    # POST /v13/projects/<id>/link). Leave it alone after creation.
+    ignore_changes = [git_repository]
   }
 }
 
@@ -38,6 +43,8 @@ resource "vercel_project" "frontend" {
 
   lifecycle {
     prevent_destroy = true
+    # See backend note: don't let Terraform re-touch (and unlink) the git repo.
+    ignore_changes = [git_repository]
   }
 }
 
