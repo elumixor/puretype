@@ -3,8 +3,21 @@ import { isUrlLike, normalizeUrl, suggestTokens } from "$lib/tokens";
 import type { Item } from "./types";
 
 // Auto-rank: exact project → strong token → link → projects → places → tokens → create.
-export function buildItems(args: { query: string; projects: Project[]; placeItems: Item[] }): Item[] {
-  const { query, projects, placeItems } = args;
+export function buildItems(args: {
+  query: string;
+  projects: Project[];
+  placeItems: Item[];
+  bare?: boolean;
+}): Item[] {
+  const { query, projects, placeItems, bare = false } = args;
+
+  // Bare time/date (no "@"): only offer the resolved time pill — never
+  // projects, places, links, or "create", which would be noise mid-sentence.
+  if (bare)
+    return suggestTokens(query)
+      .filter((s) => s.type === "time" && s.score >= 9)
+      .map((sug) => ({ kind: "token", sug }) as Item);
+
   const q = query.trim().toLowerCase();
   const list: Item[] = [];
 

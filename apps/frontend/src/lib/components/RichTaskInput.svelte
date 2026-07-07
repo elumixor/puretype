@@ -100,10 +100,11 @@
   }
 
   function refreshItems(q: string, skipPlaceFetch = false) {
-    items = buildItems({ query: q, projects: projects.list, placeItems });
+    const bare = query?.bare ?? false;
+    items = buildItems({ query: q, projects: projects.list, placeItems, bare });
     active = 0;
     open = items.length > 0;
-    if (!skipPlaceFetch) places.schedule(q);
+    if (!skipPlaceFetch && !bare) places.schedule(q);
   }
 
   function replaceQuery(html: string) {

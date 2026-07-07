@@ -76,6 +76,28 @@ function parseDateChunk(q: string, now: Date): { date: Date; hasTime: boolean } 
   return null;
 }
 
+function partIsDateTime(part: string, now: Date): boolean {
+  return parseDateChunk(part, now) != null || parseTimeStr(part, now) != null;
+}
+
+// Find the start offset of the longest trailing run of whitespace-separated
+// words that ALL parse as a date/time — e.g. "meeting tomorrow 10:00" returns
+// the offset of "tomorrow". Lets the editor surface the time picker for bare
+// times/dates without requiring an "@" prefix. Returns null when the text does
+// not end in a date/time.
+export function matchTrailingDateTime(before: string, now = new Date()): number | null {
+  const words: { text: string; start: number }[] = [];
+  const re = /\S+/g;
+  for (let m = re.exec(before); m; m = re.exec(before)) words.push({ text: m[0], start: m.index });
+  if (!words.length) return null;
+  const first = Math.max(0, words.length - 4);
+  for (let i = first; i < words.length; i++) {
+    const run = words.slice(i);
+    if (run.every((w) => partIsDateTime(w.text, now))) return run[0].start;
+  }
+  return null;
+}
+
 export function suggestTokens(query: string, now = new Date()): Suggestion[] {
   const q = query.trim();
   const out: Suggestion[] = [];

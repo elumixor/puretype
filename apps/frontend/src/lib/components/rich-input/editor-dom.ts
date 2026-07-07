@@ -1,6 +1,8 @@
 // Pure DOM helpers for the contenteditable editor: serialization round-trip
 // (preserving pill tokens) and pill-aware backspace.
 
+import { matchTrailingDateTime } from "$lib/tokens";
+
 const ZWSP = /​/g;
 const isBlank = (n: Node | null | undefined): boolean =>
   !!n && n.nodeType === Node.TEXT_NODE && (n.textContent ?? "").replace(ZWSP, "") === "";
@@ -79,8 +81,9 @@ export function killPillBackward(editor: HTMLElement): boolean {
   return true;
 }
 
-// Caret context for "@query": which text node, where it starts/ends.
-export type QueryContext = { node: Text; start: number; end: number; text: string } | null;
+// Caret context for a picker query: which text node, where it starts/ends.
+// `bare` is true when the query is a time/date typed without an "@" prefix.
+export type QueryContext = { node: Text; start: number; end: number; text: string; bare?: boolean } | null;
 
 export function readQueryAtCaret(editor: HTMLElement): QueryContext {
   const sel = window.getSelection();
@@ -93,11 +96,23 @@ export function readQueryAtCaret(editor: HTMLElement): QueryContext {
   // Allow one inner space so "@tomorrow 19pm" / "@eiffel tower" keeps the
   // picker open. A second space (or another @) closes it.
   const m = before.match(/@([^\s@]*(?: [^\s@]*)?)$/);
-  if (!m) return null;
+  if (m) {
+    return {
+      node: node as Text,
+      start: range.startOffset - m[0].length,
+      end: range.startOffset,
+      text: m[1],
+    };
+  }
+  // No "@" query — surface the time picker if the text ends in a bare
+  // time/date like "10:00", "tomorrow", or "next mon 13:30".
+  const bareStart = matchTrailingDateTime(before);
+  if (bareStart == null) return null;
   return {
     node: node as Text,
-    start: range.startOffset - m[0].length,
+    start: bareStart,
     end: range.startOffset,
-    text: m[1],
+    text: before.slice(bareStart),
+    bare: true,
   };
 }
