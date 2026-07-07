@@ -37,6 +37,13 @@ export async function applyTaskOp(userId: string, op: Extract<OpInput, { kind: `
       // forged by a client and stays monotonic across edits.
       const completedAtPatch =
         completed !== undefined && completed !== cur.completed ? { completedAt: completed ? new Date() : null } : {};
+      // Re-stamp scheduledAt on a bucket change the same way the REST patch
+      // route does: today/week get "now" (so overdue resets), later clears it.
+      // An explicit scheduledAt in the patch (e.g. a typed date token) wins.
+      const bucketStamp =
+        rest.bucket !== undefined && scheduledAt === undefined
+          ? { scheduledAt: rest.bucket === "later" ? null : new Date() }
+          : {};
       await prisma.task.update({
         where: { id: op.id },
         data: {
@@ -44,6 +51,7 @@ export async function applyTaskOp(userId: string, op: Extract<OpInput, { kind: `
           ...(completed !== undefined ? { completed } : {}),
           ...completedAtPatch,
           ...(startTime !== undefined ? { startTime: startTime ? new Date(startTime) : null } : {}),
+          ...bucketStamp,
           ...(scheduledAt !== undefined ? { scheduledAt: scheduledAt ? new Date(scheduledAt) : null } : {}),
         },
       });
