@@ -6,6 +6,7 @@
   import BoxSelect from "$lib/components/BoxSelect.svelte";
   import BucketSection from "$lib/components/BucketSection.svelte";
   import DragGhost from "$lib/components/DragGhost.svelte";
+  import FilterBar from "$lib/components/FilterBar.svelte";
   import Onboarding from "$lib/components/Onboarding.svelte";
   import ProjectPicker from "$lib/components/ProjectPicker.svelte";
   import type RichTaskInput from "$lib/components/RichTaskInput.svelte";
@@ -139,6 +140,17 @@
 ></div>
 
 <TopBar {archivedCount} {popClass} />
+
+<!-- Landscape/desktop: projects live in a vertical list pinned to the left. -->
+<aside
+  class="hidden wide:flex flex-col fixed left-0 inset-y-0 z-30 w-56 px-3 overflow-y-auto no-scrollbar"
+  style="padding-top: calc(env(safe-area-inset-top, 0px) + 4.75rem); padding-bottom: 2rem;"
+>
+  <div class="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-ink-3)]">
+    Projects
+  </div>
+  <FilterBar layout="column" />
+</aside>
 
 <main
   class="relative max-w-md mx-auto px-5 pb-36 min-h-screen"

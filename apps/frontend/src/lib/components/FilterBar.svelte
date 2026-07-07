@@ -11,6 +11,11 @@
   import EditorModal from "./filter-bar/EditorModal.svelte";
   import ProjectAvatar from "./ProjectAvatar.svelte";
 
+  // "row" is the scrolling chip bar (mobile top bar); "column" is a vertical
+  // list used in the landscape sidebar and the mobile Projects popup.
+  const { layout = "row" }: { layout?: "row" | "column" } = $props();
+  const isCol = $derived(layout === "column");
+
   let editing = $state<Project | null>(null);
   let barEl: HTMLDivElement | undefined = $state();
   let menu = $state<{ project: Project; x: number; y: number } | null>(null);
@@ -34,7 +39,9 @@
     projects.toggleFilter(p.id);
   }
 
-  $effect(() => chipDrag.bindBar(barEl ?? null));
+  // Reordering is a horizontal-bar-only affordance; the vertical list just
+  // selects/mutes/menus, so don't wire the drag bar there.
+  $effect(() => chipDrag.bindBar(isCol ? null : (barEl ?? null)));
 
   // Scroll bar + active chip into view on in-task-pill taps only.
   $effect(() => {
@@ -77,13 +84,15 @@
   {@const visibleNoDrag = shown.filter((p) => p.id !== chipDrag.draggingId)}
   <div
     bind:this={barEl}
-    class="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1"
-    style="touch-action: pan-x; overscroll-behavior-x: contain;"
+    class={isCol
+      ? "flex flex-col items-stretch gap-1"
+      : "flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1"}
+    style={isCol ? "" : "touch-action: pan-x; overscroll-behavior-x: contain;"}
   >
     {#each visibleNoDrag as p, i (p.id)}
       {@const activeFilter = projects.filterId === p.id}
       {@const muted = projects.isMuted(p.id)}
-      {#if chipDrag.draggingId && chipDrag.dropIndex === i}
+      {#if !isCol && chipDrag.draggingId && chipDrag.dropIndex === i}
         <div
           class="shrink-0 rounded-full border border-dashed border-[var(--color-accent)]/50 bg-[var(--color-accent-dim)]/30"
           style="width: {chipDrag.ghostWidth}px; height: 28px;"
@@ -95,7 +104,8 @@
         tabindex="0"
         oncontextmenu={(e) => onChipContextMenu(e, p)}
         onpointerdown={(e) => onChipPointerDown(e, p)}
-        class="flex items-center rounded-full border transition-colors shrink-0 select-none
+        class="flex items-center rounded-full border transition-colors select-none
+          {isCol ? 'w-full' : 'shrink-0'}
           {p.hidden ? 'opacity-50' : ''}
           {muted ? 'opacity-45' : ''}
           {activeFilter
@@ -104,11 +114,12 @@
       >
         <div
           class="flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 text-[12px] font-medium
+            {isCol ? 'flex-1 min-w-0' : ''}
             {muted ? 'line-through' : ''}
             {activeFilter ? 'text-[var(--color-accent)]' : 'text-[var(--color-ink-2)]'}"
         >
           <ProjectAvatar project={p} size={18} />
-          {applyCap(p.name, toCapMode(p.capitalization), true)}
+          <span class={isCol ? "truncate" : ""}>{applyCap(p.name, toCapMode(p.capitalization), true)}</span>
         </div>
         {#if activeFilter}
           <button
@@ -122,7 +133,7 @@
         {/if}
       </div>
     {/each}
-    {#if chipDrag.draggingId && chipDrag.dropIndex === visibleNoDrag.length}
+    {#if !isCol && chipDrag.draggingId && chipDrag.dropIndex === visibleNoDrag.length}
       <div
         class="shrink-0 rounded-full border border-dashed border-[var(--color-accent)]/50 bg-[var(--color-accent-dim)]/30"
         style="width: {chipDrag.ghostWidth}px; height: 28px;"
@@ -249,12 +260,3 @@
 {#if editing}
   <EditorModal project={editing} onClose={() => (editing = null)} />
 {/if}
-
-<style>
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .no-scrollbar {
-    scrollbar-width: none;
-  }
-</style>

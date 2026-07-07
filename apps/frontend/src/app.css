@@ -1,6 +1,22 @@
 @import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap");
 
+/* "wide" = there's horizontal room for a project sidebar: landscape phones
+   (Pro-class and up) and any desktop-sized viewport. Narrower/portrait falls
+   back to the mobile "Projects" button + popup. */
+@custom-variant wide {
+  @media (orientation: landscape) and (min-width: 700px) {
+    @slot;
+  }
+}
+
+@utility no-scrollbar {
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  scrollbar-width: none;
+}
+
 @theme {
   --font-display: "Sora", system-ui, sans-serif;
   --font-sans: "Sora", system-ui, sans-serif;

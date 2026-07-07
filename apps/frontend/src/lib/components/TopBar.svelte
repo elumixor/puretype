@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Archive, Settings as SettingsIcon } from "lucide-svelte";
+  import { Archive, FolderTree, Settings as SettingsIcon } from "lucide-svelte";
+  import { portal } from "$lib/portal";
   import FilterBar from "./FilterBar.svelte";
 
   interface Props {
@@ -8,6 +9,11 @@
   }
 
   const { archivedCount, popClass = "" }: Props = $props();
+
+  // On narrow/portrait viewports the chip bar collapses to a single button that
+  // opens the project list as a popup. On wide/landscape the left sidebar owns
+  // projects, so this button is hidden there.
+  let projectsOpen = $state(false);
 </script>
 
 <div class="fixed top-0 inset-x-0 z-40 pointer-events-none">
@@ -30,7 +36,16 @@
         {/if}
       </a>
       <div class="flex-1 min-w-0">
-        <FilterBar />
+        <button
+          onclick={() => (projectsOpen = true)}
+          class="wide:hidden flex items-center gap-2 pl-2.5 pr-3.5 py-1.5 rounded-full
+            border border-[var(--color-border)] bg-[var(--color-surface)] text-[13px] font-medium
+            text-[var(--color-ink-2)] hover:text-[var(--color-ink)] hover:border-[var(--color-border-hover)]
+            transition-colors"
+        >
+          <FolderTree size={15} strokeWidth={1.75} />
+          Projects
+        </button>
       </div>
       <a
         href="/settings"
@@ -42,3 +57,26 @@
     </header>
   </div>
 </div>
+
+{#if projectsOpen}
+  <div use:portal>
+    <button
+      aria-label="Close projects"
+      class="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm animate-fade-in"
+      onclick={() => (projectsOpen = false)}
+    ></button>
+    <div
+      role="dialog"
+      aria-label="Projects"
+      class="fixed z-[61] left-3 right-3 max-w-sm rounded-3xl p-3
+        bg-[var(--color-surface-2)] border border-[var(--color-border)]
+        shadow-2xl shadow-black/50 animate-scale-in max-h-[70vh] overflow-y-auto no-scrollbar"
+      style="top: calc(env(safe-area-inset-top, 0px) + 3.5rem);"
+    >
+      <div class="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-ink-3)]">
+        Projects
+      </div>
+      <FilterBar layout="column" />
+    </div>
+  </div>
+{/if}
