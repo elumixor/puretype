@@ -1,5 +1,5 @@
 export type { Bucket, DisplayBucket } from "./tokens/bucket";
-export { bucketForDate, displayBucket } from "./tokens/bucket";
+export { bucketForDate, displayBucket, startOfDay, startOfWeek } from "./tokens/bucket";
 export { fmtDateTime, fmtDuration, fmtLinkLabel, fmtTime, isUrlLike, normalizeUrl } from "./tokens/format";
 export { localISO, parseISO, TOKEN_RE } from "./tokens/regex";
 export type { Segment } from "./tokens/segments";

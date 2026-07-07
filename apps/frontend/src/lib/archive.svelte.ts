@@ -1,17 +1,22 @@
-import type { Task } from "$lib/api";
-import { displayBucket } from "$lib/tokens";
+import type { Bucket, Task } from "$lib/api";
+import { startOfDay, startOfWeek } from "$lib/tokens";
 
-// A completed task lives in the archive unless, ignoring its completion, it
-// would still show up under Today. So only fresh today tasks stay visible when
-// done (the day's accomplishments); everything else archives on completion:
-//   bucket=today + scheduledAt is fresh  → stays in Today
-//   bucket=week (this week)              → archive on done
-//   bucket=later                         → archive on done
-//   bucket=today/week + stale (overdue)  → archive on done
+// A completed task stays visible in its section for the rest of its period,
+// then drops into the archive once that period is fully past:
+//   bucket=today  → visible until its day is over, then archive next day
+//   bucket=week   → visible until its week is over, then archive next week
+//   bucket=later  → no period; archive as soon as it's done
+// The period is anchored on scheduledAt (where the row is displayed), falling
+// back to completedAt for rows that never got a scheduledAt stamp — without
+// the fallback such tasks would never archive.
 export function isArchived(t: Task, now = new Date()): boolean {
   if (!t.completed) return false;
-  const eb = displayBucket({ ...t, completed: false }, now);
-  return eb !== "today";
+  const b = t.bucket as Bucket;
+  if (b === "later") return true;
+  const anchor = t.scheduledAt ?? t.completedAt;
+  if (!anchor) return true;
+  const d = new Date(anchor);
+  return b === "today" ? d < startOfDay(now) : d < startOfWeek(now);
 }
 
 // Pop signal: increments each time a task transitions into the archive,

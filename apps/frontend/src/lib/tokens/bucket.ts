@@ -5,14 +5,14 @@ export type Bucket = "today" | "week" | "later";
 // "today", current week for "week"). "later" never rolls over.
 export type DisplayBucket = Bucket | "overdue";
 
-function startOfDay(d: Date): Date {
+export function startOfDay(d: Date): Date {
   const c = new Date(d);
   c.setHours(0, 0, 0, 0);
   return c;
 }
 
 // Monday-start week. Returns 00:00 on Monday of the week containing d.
-function startOfWeek(d: Date): Date {
+export function startOfWeek(d: Date): Date {
   const c = startOfDay(d);
   const offset = (c.getDay() + 6) % 7; // days since Monday
   c.setDate(c.getDate() - offset);
