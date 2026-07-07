@@ -8,6 +8,7 @@
   import BucketSection from "$lib/components/BucketSection.svelte";
   import DragGhost from "$lib/components/DragGhost.svelte";
   import FilterBar from "$lib/components/FilterBar.svelte";
+  import NewProjectModal from "$lib/components/NewProjectModal.svelte";
   import Onboarding from "$lib/components/Onboarding.svelte";
   import ProjectPicker from "$lib/components/ProjectPicker.svelte";
   import type RichTaskInput from "$lib/components/RichTaskInput.svelte";
@@ -40,6 +41,9 @@
   let addInput: RichTaskInput | undefined = $state();
   let pickerOpen = $state(false);
   let hiddenBuckets = $state(defaultHidden());
+  // Set when returning from an integration OAuth redirect so the New Project
+  // modal reopens at the matching source step (see resumeOAuthReturn).
+  let resumeSource = $state<"google" | "notion" | null>(null);
 
   const matchesFilter = (t: Task) => {
     const pids = projectIds(t.text);
@@ -81,6 +85,7 @@
     void refreshEntitlement();
     void loadHiddenBuckets();
     void refreshIntegrations();
+    resumeOAuthReturn();
     dnd.onDrop = (e) => commitDrop(e, tasks);
     const onKey = buildGlobalKeydown({
       onUndo: () => void voiceTurn.undo(),
@@ -98,6 +103,21 @@
       window.removeEventListener("blur", onWindowBlur);
     };
   });
+
+  // After an integration OAuth redirect the callback returns to "/?google=..."
+  // or "/?notion=...". If the connect started from the New Project flow, reopen
+  // that modal at the source step so the user can finish picking a calendar/db.
+  function resumeOAuthReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("google") ? "google" : params.get("notion") ? "notion" : null;
+    if (!status) return;
+    const connected = params.get(status) === "connected";
+    const pending = localStorage.getItem("pendingProjectSource");
+    localStorage.removeItem("pendingProjectSource");
+    // Clean the URL so a refresh doesn't re-trigger.
+    window.history.replaceState({}, "", window.location.pathname);
+    if (connected && pending === status) resumeSource = status;
+  }
 
   // Nudge the server to pull any stale external sources (Google/Notion), then
   // sync so the fresh tasks land locally. Cheap no-op for users with none.
@@ -193,6 +213,10 @@
 
 {#if pickerOpen}
   <ProjectPicker onClose={() => (pickerOpen = false)} />
+{/if}
+
+{#if resumeSource}
+  <NewProjectModal start={resumeSource} onClose={() => (resumeSource = null)} />
 {/if}
 
 <BottomComposer bind:input={addInput} bind:bubble={voiceBubbleEl} onSubmit={submitNewTask} {onVoiceRecorded} />

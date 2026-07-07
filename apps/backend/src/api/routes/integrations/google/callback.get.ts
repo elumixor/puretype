@@ -12,7 +12,7 @@ import { z } from "zod";
 export default handler(
   { query: { code: z.string().optional(), state: z.string().optional(), error: z.string().optional() } },
   async ({ query, event }) => {
-    const back = (status: string) => sendRedirect(event, `${env.PUBLIC_APP_URL}/settings?google=${status}`, 302);
+    const back = (status: string) => sendRedirect(event, `${env.PUBLIC_APP_URL}/?google=${status}`, 302);
 
     if (query.error || !query.code || !query.state) return back("error");
     const claim = verifyState(query.state);

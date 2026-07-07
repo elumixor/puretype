@@ -11,7 +11,6 @@
     signInWithApple,
     signInWithGoogle,
   } from "$lib/auth/social-login";
-  import Integrations from "$lib/components/Integrations.svelte";
   import Paywall from "$lib/components/Paywall.svelte";
   import SignInButtons from "$lib/components/SignInButtons.svelte";
   import UserAvatar from "$lib/components/UserAvatar.svelte";
@@ -25,6 +24,10 @@
 
   const BUCKETS: Bucket[] = ["today", "week", "later"];
 
+  const me = $derived(user.me);
+  const resolved = $derived(user.resolved);
+  const anonymous = $derived(me?.anonymous ?? true);
+
   const displayName = $derived(me?.name || me?.email || "You");
   const completed = $derived(tasksStore.list.filter((t) => t.completed).length);
   const active = $derived(tasksStore.list.filter((t) => !t.completed).length);
@@ -32,10 +35,6 @@
   const memberSince = $derived(
     me?.createdAt ? new Date(me.createdAt).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : null,
   );
-
-  const me = $derived(user.me);
-  const resolved = $derived(user.resolved);
-  const anonymous = $derived(me?.anonymous ?? true);
 
   let signingIn = $state(false);
   let deleting = $state(false);
@@ -220,12 +219,6 @@
       {#if error}<p class="text-sm text-red-500 mt-4">{error}</p>{/if}
     {/if}
   </section>
-
-  {#if !anonymous}
-    <div class="mt-10">
-      <Integrations />
-    </div>
-  {/if}
 
   {#if !anonymous}
     <section class="mt-10">

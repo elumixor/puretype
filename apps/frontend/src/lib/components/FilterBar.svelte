@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Eye, EyeOff, Plus, Settings2, X } from "lucide-svelte";
-  import { tick, untrack } from "svelte";
+  import { untrack } from "svelte";
   import type { Project } from "$lib/api";
   import { applyCap, toCapMode } from "$lib/capitalize";
   import { portal } from "$lib/portal";
@@ -9,6 +9,7 @@
   import { makeChipPressHandler } from "./filter-bar/chip-press";
   import ChipMenu from "./filter-bar/ChipMenu.svelte";
   import EditorModal from "./filter-bar/EditorModal.svelte";
+  import NewProjectModal from "./NewProjectModal.svelte";
   import ProjectAvatar from "./ProjectAvatar.svelte";
 
   // "row" is the scrolling chip bar (mobile top bar); "column" is a vertical
@@ -20,24 +21,10 @@
   let barEl: HTMLDivElement | undefined = $state();
   let menu = $state<{ project: Project; x: number; y: number } | null>(null);
 
-  // Inline "New project" flow — gives a visible, discoverable way to create a
-  // project (you can also still type "@name" in the composer). (#44)
+  // "New project" flow — a blank project, or one bound to a Google calendar /
+  // Notion database (the integration entry point lives here, not in Settings).
   let creating = $state(false);
-  let newName = $state("");
-  let newNameEl: HTMLInputElement | undefined = $state();
-
-  function openCreate() {
-    creating = true;
-    newName = "";
-    void tick().then(() => newNameEl?.focus());
-  }
-  async function submitCreate() {
-    const name = newName.trim();
-    creating = false;
-    if (!name) return;
-    const p = await projects.create(name);
-    projects.toggleFilter(p.id);
-  }
+  const openCreate = () => (creating = true);
 
   // Reordering is a horizontal-bar-only affordance; the vertical list just
   // selects/mutes/menus, so don't wire the drag bar there.
@@ -178,47 +165,7 @@
 {/if}
 
 {#if creating}
-  <div use:portal>
-    <button
-      aria-label="Cancel"
-      class="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm animate-fade-in"
-      onclick={() => (creating = false)}
-    ></button>
-    <div
-      class="fixed left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 z-[61] w-[min(92vw,360px)]
-        p-5 rounded-3xl bg-[var(--color-surface-2)] border border-[var(--color-border)]
-        shadow-2xl shadow-black/50 animate-scale-in"
-    >
-      <h2 class="text-sm font-semibold mb-3">New project</h2>
-      <input
-        bind:this={newNameEl}
-        bind:value={newName}
-        placeholder="Project name"
-        onkeydown={(e) => {
-          if (e.key === "Enter") submitCreate();
-          else if (e.key === "Escape") creating = false;
-        }}
-        class="w-full h-11 px-3 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)]
-          text-sm text-[var(--color-ink)] focus:border-[var(--color-accent)] focus:outline-none"
-      />
-      <div class="flex justify-end gap-2 mt-4">
-        <button
-          onclick={() => (creating = false)}
-          class="px-4 h-10 rounded-xl text-sm text-[var(--color-ink-2)] hover:bg-[var(--color-surface-3)] transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          onclick={submitCreate}
-          disabled={!newName.trim()}
-          class="px-4 h-10 rounded-xl text-sm font-medium bg-[var(--color-accent)] text-[var(--color-bg)]
-            disabled:opacity-50 transition-opacity"
-        >
-          Create
-        </button>
-      </div>
-    </div>
-  </div>
+  <NewProjectModal onClose={() => (creating = false)} />
 {/if}
 
 {#if chipDrag.draggingId}
