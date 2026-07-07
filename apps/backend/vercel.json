@@ -2,5 +2,8 @@
   "framework": "nitro",
   "installCommand": "cd ../.. && bun install",
   "buildCommand": "bun run build",
-  "crons": [{ "path": "/cron/rollover", "schedule": "0 0 * * *" }]
+  "crons": [
+    { "path": "/cron/rollover", "schedule": "0 0 * * *" },
+    { "path": "/cron/sync-integrations", "schedule": "*/15 * * * *" }
+  ]
 }

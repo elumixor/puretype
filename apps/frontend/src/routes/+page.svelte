@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { api } from "$lib/api";
   import { archivePop, isArchived } from "$lib/archive.svelte";
   import type { Task } from "$lib/api";
   import BottomComposer from "$lib/components/BottomComposer.svelte";
@@ -28,6 +29,7 @@
   import { projects } from "$lib/projects.svelte";
   import { settings } from "$lib/settings.svelte";
   import { refreshEntitlement } from "$lib/storekit";
+  import { sync } from "$lib/sync.svelte";
   import { ls } from "$lib/storage";
   import { tasks as tasksStore } from "$lib/tasks.svelte";
   import { displayBucket, projectIds } from "$lib/tokens";
@@ -78,6 +80,7 @@
     void settings.boot();
     void refreshEntitlement();
     void loadHiddenBuckets();
+    void refreshIntegrations();
     dnd.onDrop = (e) => commitDrop(e, tasks);
     const onKey = buildGlobalKeydown({
       onUndo: () => void voiceTurn.undo(),
@@ -95,6 +98,17 @@
       window.removeEventListener("blur", onWindowBlur);
     };
   });
+
+  // Nudge the server to pull any stale external sources (Google/Notion), then
+  // sync so the fresh tasks land locally. Cheap no-op for users with none.
+  async function refreshIntegrations() {
+    try {
+      await api.integrations.refresh.$post();
+      sync.schedule(0);
+    } catch {
+      // best-effort; the periodic sync + cron will still catch up
+    }
+  }
 
   async function loadHiddenBuckets() {
     try {

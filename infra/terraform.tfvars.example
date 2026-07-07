@@ -17,5 +17,11 @@ apple_client_id    = "com.atmagaming.eos"
 # google_ios_client_id = "...apps.googleusercontent.com"
 # apple_web_client_id  = "com.atmagaming.eos.web"
 
+# External integrations (optional — leave unset to keep disabled).
+# google_client_secret = "GOCSPX-..."          # secret of the Google *web* OAuth client
+# notion_client_id     = "..."
+# notion_client_secret = "secret_..."
+# cron_secret          = "..."                  # protects /cron/* endpoints
+
 # Comma-separated emails allowed to access /admin/*. Leave empty to disable.
 admin_emails = "you@example.com"

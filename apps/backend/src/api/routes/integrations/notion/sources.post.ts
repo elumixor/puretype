@@ -1,0 +1,64 @@
+import { createError } from "h3";
+import { requireAuth } from "services/auth";
+import { syncNotionSource } from "services/integrations/sync";
+import { prisma } from "services/prisma";
+import { handler } from "utils";
+import { z } from "zod";
+
+// Bind a Notion database to a project with its date/status mapping, then pull
+// it in immediately.
+export default handler(
+  {
+    body: {
+      accountId: z.string(),
+      databaseId: z.string(),
+      databaseName: z.string(),
+      projectId: z.string(),
+      datePropertyId: z.string().nullable().optional(),
+      statusPropertyId: z.string().nullable().optional(),
+      statusPropType: z.enum(["checkbox", "status", "select"]).nullable().optional(),
+      doneValue: z.string().nullable().optional(),
+    },
+  },
+  async ({ user, body }) => {
+    requireAuth(user);
+    const [account, project] = await Promise.all([
+      prisma.notionAccount.findFirst({ where: { id: body.accountId, userId: user.id }, select: { id: true } }),
+      prisma.project.findFirst({ where: { id: body.projectId, userId: user.id }, select: { id: true } }),
+    ]);
+    if (!account) throw createError({ statusCode: 404, statusMessage: "Account not found" });
+    if (!project) throw createError({ statusCode: 404, statusMessage: "Project not found" });
+
+    const source = await prisma.notionSource.upsert({
+      where: { notionAccountId_databaseId: { notionAccountId: body.accountId, databaseId: body.databaseId } },
+      create: {
+        userId: user.id,
+        notionAccountId: body.accountId,
+        databaseId: body.databaseId,
+        databaseName: body.databaseName,
+        projectId: body.projectId,
+        datePropertyId: body.datePropertyId ?? null,
+        statusPropertyId: body.statusPropertyId ?? null,
+        statusPropType: body.statusPropType ?? null,
+        doneValue: body.doneValue ?? null,
+      },
+      update: {
+        databaseName: body.databaseName,
+        projectId: body.projectId,
+        datePropertyId: body.datePropertyId ?? null,
+        statusPropertyId: body.statusPropertyId ?? null,
+        statusPropType: body.statusPropType ?? null,
+        doneValue: body.doneValue ?? null,
+      },
+      include: { account: true },
+    });
+
+    try {
+      await syncNotionSource(source);
+    } catch (err) {
+      console.error("[integrations] initial notion sync failed:", err);
+    }
+    const { account: _omit, ...rest } = source;
+    return rest;
+  },
+);

@@ -11,6 +11,7 @@
     signInWithApple,
     signInWithGoogle,
   } from "$lib/auth/social-login";
+  import Integrations from "$lib/components/Integrations.svelte";
   import Paywall from "$lib/components/Paywall.svelte";
   import SignInButtons from "$lib/components/SignInButtons.svelte";
   import UserAvatar from "$lib/components/UserAvatar.svelte";
@@ -219,6 +220,12 @@
       {#if error}<p class="text-sm text-red-500 mt-4">{error}</p>{/if}
     {/if}
   </section>
+
+  {#if !anonymous}
+    <div class="mt-10">
+      <Integrations />
+    </div>
+  {/if}
 
   {#if !anonymous}
     <section class="mt-10">

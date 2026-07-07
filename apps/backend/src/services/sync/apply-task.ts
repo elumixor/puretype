@@ -1,3 +1,4 @@
+import { writeBackNotionDone } from "services/integrations/sync";
 import { prisma } from "services/prisma";
 import type { OpInput, OpResult } from "./schemas";
 
@@ -46,6 +47,13 @@ export async function applyTaskOp(userId: string, op: Extract<OpInput, { kind: `
           ...(scheduledAt !== undefined ? { scheduledAt: scheduledAt ? new Date(scheduledAt) : null } : {}),
         },
       });
+      // Two-way sync: mirror a completion change on a Notion-sourced task back
+      // to its page. Awaited (not fire-and-forget) so it actually runs before
+      // this serverless invocation returns; it self-catches and never throws,
+      // and the user's tap already applied optimistically on the client.
+      if (cur.source === "notion" && completed !== undefined && completed !== cur.completed) {
+        await writeBackNotionDone(op.id, completed);
+      }
       return { ok: true };
     }
     case "task.delete": {

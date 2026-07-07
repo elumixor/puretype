@@ -10,7 +10,94 @@ model User {
   events    AnalyticsEvent[]
   telegramLinks     TelegramLink[]
   telegramLinkCodes TelegramLinkCode[]
+  googleAccounts    GoogleAccount[]
+  notionAccounts    NotionAccount[]
+  calendarSources   CalendarSource[]
+  notionSources     NotionSource[]
   createdAt DateTime @default(now())
+}
+
+// A connected Google account (full OAuth, Calendar scope) — distinct from the
+// Google *sign-in* which only ever sees an ID token. A user may connect many.
+model GoogleAccount {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  googleUserId String   // Google account 'sub'
+  email        String
+  accessToken  String
+  refreshToken String?  // only issued on first consent — kept across refreshes
+  expiresAt    DateTime // access-token expiry
+  scope        String
+  createdAt    DateTime @default(now())
+  calendarSources CalendarSource[]
+
+  @@unique([userId, googleUserId])
+  @@index([userId])
+}
+
+// Binds one calendar of a Google account to a project. Its events are pulled
+// in as tasks (source = "google").
+model CalendarSource {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  googleAccountId String
+  account         GoogleAccount @relation(fields: [googleAccountId], references: [id], onDelete: Cascade)
+  calendarId      String
+  calendarName    String
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  syncToken       String?       // Google incremental sync token
+  lastSyncedAt    DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@unique([googleAccountId, calendarId])
+  @@index([userId])
+  @@index([projectId])
+}
+
+// A connected Notion workspace (OAuth). A user may connect many workspaces.
+model NotionAccount {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId   String
+  workspaceName String
+  workspaceIcon String?
+  botId         String
+  accessToken   String
+  createdAt     DateTime @default(now())
+  notionSources NotionSource[]
+
+  @@unique([userId, workspaceId])
+  @@index([userId])
+}
+
+// Binds a Notion database (optionally a specific view) to a project, with the
+// property mapping used to sync date + done-state. Two-way: local completion
+// writes back to the mapped status property.
+model NotionSource {
+  id               String        @id @default(cuid())
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notionAccountId  String
+  account          NotionAccount @relation(fields: [notionAccountId], references: [id], onDelete: Cascade)
+  databaseId       String
+  databaseName     String
+  viewId           String?
+  projectId        String
+  project          Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  datePropertyId   String?       // property → task scheduledAt/startTime
+  statusPropertyId String?       // property representing "done"
+  statusPropType   String?       // "checkbox" | "status" | "select"
+  doneValue        String?       // status/select option name that means done
+  lastSyncedAt     DateTime?
+  createdAt        DateTime      @default(now())
+
+  @@unique([notionAccountId, databaseId])
+  @@index([userId])
+  @@index([projectId])
 }
 
 // Maps a Telegram account (from.id) to an app user. Created when the user
@@ -69,6 +156,8 @@ model Project {
   parents    ProjectParent[] @relation("ChildToParents")
   children   ProjectParent[] @relation("ParentToChildren")
   tasks      Task[]
+  calendarSources CalendarSource[]
+  notionSources   NotionSource[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   deletedAt  DateTime?
@@ -109,10 +198,19 @@ model Task {
   projectId   String?
   startTime   DateTime?
   duration    Int? // minutes
+  // External-source provenance. "manual" tasks are created in-app; "google" /
+  // "notion" tasks mirror an external item and are upserted by the sync engine.
+  source           String    @default("manual") // manual | google | notion
+  externalId       String?   // provider item id (calendar event id / notion page id)
+  externalSourceId String?   // CalendarSource.id or NotionSource.id
+  externalUrl      String?
+  externalUpdatedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
+  @@unique([externalSourceId, externalId])
   @@index([userId])
   @@index([userId, updatedAt])
+  @@index([externalSourceId])
 }

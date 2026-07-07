@@ -138,6 +138,43 @@ resource "vercel_project_environment_variable" "backend_apple_web_client_id" {
   sensitive  = true
 }
 
+# --- External integrations (optional).
+resource "vercel_project_environment_variable" "backend_google_client_secret" {
+  count      = var.google_client_secret == "" ? 0 : 1
+  project_id = vercel_project.backend.id
+  key        = "GOOGLE_CLIENT_SECRET"
+  value      = var.google_client_secret
+  target     = ["production", "preview"]
+  sensitive  = true
+}
+
+resource "vercel_project_environment_variable" "backend_notion_client_id" {
+  count      = var.notion_client_id == "" ? 0 : 1
+  project_id = vercel_project.backend.id
+  key        = "NOTION_CLIENT_ID"
+  value      = var.notion_client_id
+  target     = ["production", "preview"]
+  sensitive  = true
+}
+
+resource "vercel_project_environment_variable" "backend_notion_client_secret" {
+  count      = var.notion_client_secret == "" ? 0 : 1
+  project_id = vercel_project.backend.id
+  key        = "NOTION_CLIENT_SECRET"
+  value      = var.notion_client_secret
+  target     = ["production", "preview"]
+  sensitive  = true
+}
+
+resource "vercel_project_environment_variable" "backend_cron_secret" {
+  count      = var.cron_secret == "" ? 0 : 1
+  project_id = vercel_project.backend.id
+  key        = "CRON_SECRET"
+  value      = var.cron_secret
+  target     = ["production", "preview"]
+  sensitive  = true
+}
+
 # --- Frontend build-time vars.
 # These are baked into the Vite bundle at build time. The VITE_GOOGLE_*
 # values intentionally mirror their backend counterparts (same OAuth client).

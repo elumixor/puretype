@@ -92,6 +92,36 @@ variable "apple_web_client_id" {
   default     = ""
 }
 
+# --- External integrations (Google Calendar + Notion). All optional: leave
+# empty to keep the respective integration disabled (routes return 501).
+variable "google_client_secret" {
+  description = "Client secret of the Google OAuth *web* client (same client as google_client_id), used for the Calendar authorization-code flow."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "notion_client_id" {
+  description = "Notion public OAuth integration client ID."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "notion_client_secret" {
+  description = "Notion public OAuth integration client secret."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "cron_secret" {
+  description = "If set, /cron/* endpoints require this as a Bearer token. Vercel sends it automatically when configured as CRON_SECRET."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 # Frontend-only build-time vars (must be present at `vite build`).
 variable "vite_google_maps_api_key" {
   description = "Google Maps JS SDK key used by the frontend."
