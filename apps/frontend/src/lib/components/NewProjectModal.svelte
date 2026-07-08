@@ -1,19 +1,18 @@
 <script lang="ts">
-  import { Calendar, ChevronRight, FileText, FolderPlus, Loader2, Plus } from "lucide-svelte";
+  import { Calendar, ChevronRight, FileText, FolderPlus, Loader2 } from "lucide-svelte";
   import { onMount, tick } from "svelte";
   import { api } from "$lib/api/client";
   import { portal } from "$lib/portal";
   import { projects } from "$lib/projects.svelte";
   import { sync } from "$lib/sync.svelte";
+  import Select from "./ui/Select.svelte";
 
-  // Where the "add project" flow lives now: blank, or a project bound to a
-  // Google calendar / Notion database. Replaces the old Settings → Integrations
-  // panel — connecting an account happens inline here on demand.
+  // Where the "add project" flow lives: blank, or a project bound to a Google
+  // calendar / Notion database. Connecting an account happens inline (as a
+  // dropdown option), and the project name is editable before creating.
   let { onClose, start = "choose" }: { onClose: () => void; start?: Step } = $props();
 
   type Step = "choose" | "blank" | "google" | "notion";
-  // `start` seeds the initial step once; the modal is remounted per open, so
-  // capturing the initial value (not tracking it) is intended.
   // svelte-ignore state_referenced_locally
   let step = $state<Step>(start);
   let busy = $state(false);
@@ -22,8 +21,7 @@
   type Overview = Awaited<ReturnType<typeof api.integrations.$get>>;
   let overview = $state<Overview | null>(null);
 
-  // Blank
-  let name = $state("");
+  let name = $state(""); // project name (blank step, or alias for a source)
   let nameEl: HTMLInputElement | undefined = $state();
 
   // Google
@@ -43,8 +41,27 @@
 
   const dateProps = $derived(properties.filter((p) => p.type === "date"));
   const statusProps = $derived(properties.filter((p) => ["checkbox", "status", "select"].includes(p.type)));
-  const selectedStatus = $derived(properties.find((p) => p.id === nStatus));
-  const doneOptions = $derived(selectedStatus?.options ?? []);
+  const doneOptions = $derived(properties.find((p) => p.id === nStatus)?.options ?? []);
+
+  const gAccountOptions = $derived([
+    ...(overview?.google.accounts ?? []).map((a) => ({ value: a.id, label: a.email })),
+    { value: "__connect", label: "Connect another account…", action: true },
+  ]);
+  const calOptions = $derived(calendars.map((c) => ({ value: c.id, label: c.name + (c.primary ? " · primary" : "") })));
+  const nAccountOptions = $derived([
+    ...(overview?.notion.accounts ?? []).map((a) => ({ value: a.id, label: a.workspaceName })),
+    { value: "__connect", label: "Connect another workspace…", action: true },
+  ]);
+  const dbOptions = $derived(databases.map((d) => ({ value: d.id, label: d.title })));
+  const dateOptions = $derived([{ value: "", label: "None" }, ...dateProps.map((p) => ({ value: p.id, label: p.name }))]);
+  const statusOptions = $derived([
+    { value: "", label: "None" },
+    ...statusProps.map((p) => ({ value: p.id, label: `${p.name} (${p.type})` })),
+  ]);
+  const doneValueOptions = $derived([
+    { value: "", label: "Choose…" },
+    ...doneOptions.map((o) => ({ value: o, label: o })),
+  ]);
 
   onMount(async () => {
     try {
@@ -52,27 +69,26 @@
     } catch {
       overview = { google: { configured: false, accounts: [] }, notion: { configured: false, accounts: [] } } as Overview;
     }
-    // Deep-linked into a source step (e.g. returning from OAuth) — preselect.
     if (step === "google") await enterGoogle();
     else if (step === "notion") await enterNotion();
   });
 
-  // Create the project server-side-first, then bind the source. The project is
-  // offline-first, so flush the outbox before binding or the bind 404s.
-  async function createBoundProject(projectName: string, bind: (projectId: string) => Promise<void>) {
+  async function createBoundProject(bind: (projectId: string) => Promise<void>) {
+    const projectName = name.trim();
+    if (!projectName) return;
     busy = true;
     error = null;
     try {
       const project = await projects.create(projectName);
-      await sync.runNow(); // ensure the server has the project row
+      await sync.runNow();
       try {
         await bind(project.id);
       } catch {
-        await sync.runNow(); // one retry in case of a create/bind race
+        await sync.runNow();
         await bind(project.id);
       }
       projects.toggleFilter(project.id);
-      sync.schedule(0); // pull the freshly imported tasks
+      sync.schedule(0);
       onClose();
     } catch (e) {
       error = e instanceof Error ? e.message : "Couldn't create project";
@@ -83,6 +99,7 @@
   // --- blank ---
   async function chooseBlank() {
     step = "blank";
+    name = "";
     await tick();
     nameEl?.focus();
   }
@@ -117,17 +134,25 @@
     try {
       const r = await api.integrations.google.calendars.$post({ accountId: gAccountId });
       calendars = r.calendars;
-      gCalId = r.calendars.find((c) => c.primary)?.id ?? r.calendars[0]?.id ?? "";
+      const primary = r.calendars.find((c) => c.primary) ?? r.calendars[0];
+      if (primary) {
+        gCalId = primary.id;
+        name = primary.name;
+      }
     } catch (e) {
       error = e instanceof Error ? e.message : "Couldn't load calendars";
     } finally {
       loadingList = false;
     }
   }
+  function onPickCal(id: string) {
+    gCalId = id;
+    name = calendars.find((c) => c.id === id)?.name ?? name;
+  }
   async function createGoogle() {
     const cal = calendars.find((c) => c.id === gCalId);
     if (!cal) return;
-    await createBoundProject(cal.name, (projectId) =>
+    await createBoundProject((projectId) =>
       api.integrations.google.sources
         .$post({ accountId: gAccountId, calendarId: cal.id, calendarName: cal.name, projectId })
         .then(() => {}),
@@ -163,6 +188,7 @@
     nDbId = databaseId;
     properties = [];
     nDate = nStatus = nDone = "";
+    name = databases.find((d) => d.id === databaseId)?.title ?? name;
     if (!databaseId) return;
     try {
       const r = await api.integrations.notion.properties.$post({ accountId: nAccountId, databaseId });
@@ -174,9 +200,9 @@
   async function createNotion() {
     const db = databases.find((d) => d.id === nDbId);
     if (!db) return;
-    const t = selectedStatus?.type;
+    const t = properties.find((p) => p.id === nStatus)?.type;
     const statusPropType = t === "checkbox" || t === "status" || t === "select" ? t : null;
-    await createBoundProject(db.title, (projectId) =>
+    await createBoundProject((projectId) =>
       api.integrations.notion.sources
         .$post({
           accountId: nAccountId,
@@ -192,9 +218,6 @@
     );
   }
 
-  // Kick off OAuth. Remember which source we were adding so the app can reopen
-  // this modal on the redirect back (see routes/+page.svelte). Works both for a
-  // first connect and for adding another account/workspace.
   async function connect(provider: "google" | "notion") {
     busy = true;
     error = null;
@@ -213,15 +236,12 @@
   }
 
   const inputCls =
-    "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-ink focus:outline-none focus:border-accent transition-colors";
-  const labelCls = "block text-[11px] font-medium uppercase tracking-wider text-ink-3";
+    "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors";
+  const labelCls = "block text-[11px] font-medium uppercase tracking-wider text-ink-3 mb-1.5";
 </script>
 
 <div use:portal>
-  <button
-    aria-label="Close"
-    class="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm animate-fade-in"
-    onclick={onClose}
+  <button aria-label="Close" class="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm animate-fade-in" onclick={onClose}
   ></button>
   <div
     role="dialog"
@@ -279,72 +299,50 @@
 
     {:else if step === "google"}
       <div class="space-y-3">
-        {#if overview && overview.google.accounts.length}
-          <div class="space-y-1.5">
-            <span class={labelCls}>Account</span>
-            <select bind:value={gAccountId} onchange={loadCalendars} class={inputCls}>
-              {#each overview.google.accounts as a (a.id)}<option value={a.id}>{a.email}</option>{/each}
-            </select>
-          </div>
-        {/if}
-        <div class="space-y-1.5">
-          <span class={labelCls}>Calendar</span>
-          <select bind:value={gCalId} disabled={loadingList} class={inputCls}>
-            {#each calendars as c (c.id)}<option value={c.id}>{c.name}{c.primary ? " (primary)" : ""}</option>{/each}
-          </select>
+        <div>
+          <span class={labelCls}>Account</span>
+          <Select bind:value={gAccountId} options={gAccountOptions} onChange={loadCalendars} onAction={() => connect("google")} />
         </div>
-        <button type="button" onclick={() => connect("google")} disabled={busy}
-          class="inline-flex items-center gap-1.5 text-xs font-medium text-ink-3 hover:text-accent transition-colors disabled:opacity-50">
-          <Plus size={13} /> Connect another account
-        </button>
+        <div>
+          <span class={labelCls}>Calendar</span>
+          <Select value={gCalId} options={calOptions} placeholder={loadingList ? "Loading…" : "Choose…"} onChange={onPickCal} />
+        </div>
+        <div>
+          <span class={labelCls}>Project name</span>
+          <input bind:value={name} placeholder="Project name" class={inputCls} />
+        </div>
       </div>
 
     {:else if step === "notion"}
       <div class="space-y-3">
-        {#if overview && overview.notion.accounts.length}
-          <div class="space-y-1.5">
-            <span class={labelCls}>Workspace</span>
-            <select bind:value={nAccountId} onchange={loadDatabases} class={inputCls}>
-              {#each overview.notion.accounts as a (a.id)}<option value={a.id}>{a.workspaceName}</option>{/each}
-            </select>
-          </div>
-        {/if}
-        <div class="space-y-1.5">
+        <div>
+          <span class={labelCls}>Workspace</span>
+          <Select bind:value={nAccountId} options={nAccountOptions} onChange={loadDatabases} onAction={() => connect("notion")} />
+        </div>
+        <div>
           <span class={labelCls}>Database</span>
-          <select value={nDbId} onchange={(e) => onPickDb(e.currentTarget.value)} disabled={loadingList} class={inputCls}>
-            <option value="">{loadingList ? "Loading…" : "Choose a database…"}</option>
-            {#each databases as d (d.id)}<option value={d.id}>{d.title}</option>{/each}
-          </select>
+          <Select value={nDbId} options={dbOptions} placeholder={loadingList ? "Loading…" : "Choose a database…"} onChange={onPickDb} />
         </div>
         {#if nDbId}
-          <div class="space-y-1.5">
-            <span class={labelCls}>Date property</span>
-            <select bind:value={nDate} class={inputCls}>
-              <option value="">None</option>
-              {#each dateProps as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-            </select>
+          <div>
+            <span class={labelCls}>Project name</span>
+            <input bind:value={name} placeholder="Project name" class={inputCls} />
           </div>
-          <div class="space-y-1.5">
+          <div>
+            <span class={labelCls}>Date property</span>
+            <Select bind:value={nDate} options={dateOptions} />
+          </div>
+          <div>
             <span class={labelCls}>Done property</span>
-            <select bind:value={nStatus} onchange={() => (nDone = "")} class={inputCls}>
-              <option value="">None</option>
-              {#each statusProps as p (p.id)}<option value={p.id}>{p.name} ({p.type})</option>{/each}
-            </select>
+            <Select bind:value={nStatus} options={statusOptions} onChange={() => (nDone = "")} />
           </div>
           {#if doneOptions.length}
-            <div class="space-y-1.5">
+            <div>
               <span class={labelCls}>"Done" means</span>
-              <select bind:value={nDone} class={inputCls}>
-                <option value="">Choose…</option>
-                {#each doneOptions as o (o)}<option value={o}>{o}</option>{/each}
-              </select>
+              <Select bind:value={nDone} options={doneValueOptions} />
             </div>
           {/if}
         {/if}
-        <button type="button" onclick={() => connect("notion")} disabled={busy}
-          class="inline-flex items-center gap-1.5 text-xs font-medium text-ink-3 hover:text-accent transition-colors disabled:opacity-50">
-          <Plus size={13} /> Connect another workspace
-        </button>
       </div>
     {/if}
 
@@ -361,12 +359,12 @@
         <button type="button" onclick={createBlank} disabled={busy || !name.trim()}
           class="inline-flex items-center justify-center h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">Create</button>
       {:else if step === "google"}
-        <button type="button" onclick={createGoogle} disabled={busy || !gCalId}
+        <button type="button" onclick={createGoogle} disabled={busy || !gCalId || !name.trim()}
           class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">
           {#if busy}<Loader2 size={14} class="animate-spin" />{/if} Create
         </button>
       {:else if step === "notion"}
-        <button type="button" onclick={createNotion} disabled={busy || !nDbId}
+        <button type="button" onclick={createNotion} disabled={busy || !nDbId || !name.trim()}
           class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">
           {#if busy}<Loader2 size={14} class="animate-spin" />{/if} Create
         </button>

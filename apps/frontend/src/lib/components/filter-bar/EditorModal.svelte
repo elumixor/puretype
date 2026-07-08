@@ -12,12 +12,12 @@
 <div use:portal>
   <button
     aria-label="Close"
-    class="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm animate-fade-in"
+    class="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm animate-fade-in"
     onclick={onClose}
   ></button>
   <div
-    class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[61] w-[min(92vw,360px)]
-      p-5 rounded-3xl bg-[var(--color-surface-2)] border border-[var(--color-border)]
+    class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[91] w-[min(92vw,380px)]
+      p-5 rounded-xl bg-surface-2 border border-border max-h-[85vh] overflow-y-auto
       shadow-2xl shadow-black/50 animate-scale-in"
   >
     <ProjectAvatarEditor {project} {onClose} />

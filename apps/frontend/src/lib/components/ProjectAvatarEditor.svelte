@@ -8,6 +8,7 @@
   import AvatarPicker from "./project-editor/AvatarPicker.svelte";
   import CapPicker from "./project-editor/CapPicker.svelte";
   import NameEditor from "./project-editor/NameEditor.svelte";
+  import SourceLink from "./project-editor/SourceLink.svelte";
   import ProjectAvatar from "./ProjectAvatar.svelte";
 
   let { project, onClose }: { project: Project; onClose: () => void } = $props();
@@ -129,11 +130,13 @@
 
   <CapPicker mode={capMode} name={live.name} onSelect={setCap} />
 
+  <SourceLink projectId={project.id} />
+
   <button
     onclick={onClose}
     disabled={busy}
-    class="w-full py-2.5 rounded-2xl bg-[var(--color-accent)] text-[var(--color-bg)] text-[13px] font-medium
-      active:scale-[0.98] transition-transform disabled:opacity-50"
+    class="w-full h-10 rounded-md bg-accent text-bg text-sm font-medium
+      hover:bg-accent-hover active:scale-[0.99] transition-all disabled:opacity-50"
   >
     Done
   </button>
