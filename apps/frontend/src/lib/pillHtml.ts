@@ -20,6 +20,7 @@ const CLOCK = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" strok
 const HOURGLASS = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12M6 21h12M7 3c0 5 5 6 5 9s-5 4-5 9M17 3c0 5-5 6-5 9s5 4 5 9"/></svg>`;
 const MAPPIN = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
 const LINK = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 1 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 1 0 7.07 7.07l1.5-1.5"/></svg>`;
+const REPEAT = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>`;
 
 export function avatarHtml(project: Project | undefined, name: string, size = 15): string {
   if (project?.avatarType === "image" && project.image)
@@ -41,12 +42,13 @@ function pillInner(seg: Segment, atSentenceStart = true): string {
   if (seg.kind === "place")
     return `${MAPPIN}<span class="pill-place-name" title="${esc(seg.name)}">${esc(seg.name)}</span>`;
   if (seg.kind === "link") return `${LINK}<span>${esc(fmtLinkLabel(seg.url))}</span>`;
+  if (seg.kind === "repeat") return REPEAT; // icon only, no label (matches display)
   return "";
 }
 
 function pillClass(seg: Segment): string {
   if (seg.kind === "project") return "pill pill-project";
-  if (seg.kind === "time") return "pill pill-time";
+  if (seg.kind === "time" || seg.kind === "repeat") return "pill pill-time";
   if (seg.kind === "place") return "pill pill-place";
   if (seg.kind === "link") return "pill pill-link";
   return "pill pill-dur";
@@ -57,6 +59,7 @@ function tokenOf(seg: Segment): string {
   if (seg.kind === "dur") return `@dur:${seg.minutes}`;
   if (seg.kind === "place") return `@place:${encodeURIComponent(seg.name)}|${seg.lat},${seg.lng}`;
   if (seg.kind === "link") return `@link:${encodeURIComponent(seg.url)}`;
+  if (seg.kind === "repeat") return `@repeat:${seg.code}`;
   if (seg.kind !== "time") return "";
   const d = seg.date;
   const pad = (n: number) => String(n).padStart(2, "0");

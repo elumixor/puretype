@@ -222,6 +222,15 @@ html.dnd-dragging * {
   animation: scale-in 0.3s var(--ease-spring) both;
 }
 
+/* Context menus: near-instant appearance. */
+@keyframes menu-pop {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-menu-pop {
+  animation: menu-pop 0.09s var(--ease-spring) both;
+}
+
 .animate-check-pop {
   animation: check-pop 0.3s var(--ease-spring);
 }

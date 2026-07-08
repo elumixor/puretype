@@ -1,27 +1,16 @@
 <script lang="ts">
-  // Brand logos served from Brandfetch's Logo Link CDN (no hand-drawn SVGs).
-  // Needs a free Logo Link client id in VITE_BRANDFETCH_CLIENT_ID.
-  let { brand, size = 14, class: cls = "" }: { brand: "google" | "notion"; size?: number; class?: string } = $props();
+  import { BRAND_ICONS } from "./brand-data";
 
-  const DOMAIN: Record<typeof brand, string> = {
-    google: "calendar.google.com",
-    notion: "notion.so",
-  };
-  const clientId = import.meta.env.VITE_BRANDFETCH_CLIENT_ID as string | undefined;
-  // 2x for crisp rendering on retina.
-  const src = $derived(
-    clientId ? `https://cdn.brandfetch.io/${DOMAIN[brand]}/w/${size * 2}/h/${size * 2}/icon?c=${clientId}` : "",
-  );
+  // Renders a brand logo from build-time data URIs (see brand-data.ts) — no
+  // runtime fetch, no hand-written SVG.
+  let { brand, size = 14, class: cls = "" }: { brand: "google" | "notion"; size?: number; class?: string } = $props();
 </script>
 
-{#if src}
-  <img
-    {src}
-    width={size}
-    height={size}
-    alt=""
-    loading="lazy"
-    class="inline-block shrink-0 rounded-[3px] {cls}"
-    style="width:{size}px;height:{size}px"
-  />
-{/if}
+<img
+  src={BRAND_ICONS[brand]}
+  width={size}
+  height={size}
+  alt=""
+  class="inline-block shrink-0 rounded-[3px] {cls}"
+  style="width:{size}px;height:{size}px"
+/>

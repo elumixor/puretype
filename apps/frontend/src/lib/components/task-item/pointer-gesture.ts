@@ -2,11 +2,11 @@
 //
 // Web (mouse): pointerdown + any movement → start drag. pointerup with no
 // movement → tap. Right-click → context menu (caller handles).
-// Touch/pen: long-press (450ms held still) → open context menu and arm drag.
+// Touch/pen: long-press (held still) → open context menu and arm drag.
 // After arming, movement closes the menu and starts the drag. A plain tap
 // (no long-press) → tap.
 
-const LONG_PRESS_MS = 450;
+const LONG_PRESS_MS = 250;
 const MOVE_START_PX = 5;
 const MOVE_TAP_PX = 6;
 

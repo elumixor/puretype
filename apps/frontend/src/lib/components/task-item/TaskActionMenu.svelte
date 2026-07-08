@@ -78,7 +78,7 @@
   <div
     bind:this={menuEl}
     class="fixed z-[55] w-48 py-1.5 rounded-2xl bg-[var(--color-surface-2)] no-touch-select
-      border border-[var(--color-border)] shadow-xl shadow-black/40 animate-fade-in"
+      border border-[var(--color-border)] shadow-xl shadow-black/40 animate-menu-pop"
     style="left: {menuX}px; top: {menuY}px;"
   >
     {#if bulk}

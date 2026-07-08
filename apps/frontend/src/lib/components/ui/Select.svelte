@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { Select } from "bits-ui";
   import { Check, ChevronDown } from "lucide-svelte";
-  import { portal } from "$lib/portal";
 
-  // Minimal shadcn-style select: a styled trigger + a portaled dropdown so it
-  // never clips inside a scrolling modal. Options can be plain or "action" items
-  // (e.g. "Connect another workspace") that fire onAction instead of selecting.
+  // Thin wrapper over bits-ui's Select (the primitive shadcn-svelte builds on):
+  // tested keyboard/a11y/positioning and a reliably scrollable menu. Keeps the
+  // project's simple props API. Options can be plain or "action" items (e.g.
+  // "Connect another workspace") that fire onAction instead of selecting.
   interface Option {
     value: string;
     label: string;
@@ -26,84 +27,62 @@
     onAction?: (v: string) => void;
   } = $props();
 
-  let open = $state(false);
-  let triggerEl: HTMLButtonElement | undefined = $state();
-  let rect = $state<DOMRect | null>(null);
-
   const selected = $derived(options.find((o) => o.value === value && !o.action));
 
-  function toggle() {
-    if (disabled) return;
-    if (!open && triggerEl) rect = triggerEl.getBoundingClientRect();
-    open = !open;
-  }
-  function pick(o: Option) {
-    open = false;
-    if (o.action) onAction?.(o.value);
-    else {
-      value = o.value;
-      onChange?.(o.value);
-    }
-  }
-
-  // Close on outside pointer / scroll / resize.
+  // Internal binding mirrors only real selections; action rows are intercepted
+  // and snapped back so they never become the value.
+  let internal = $state(value);
   $effect(() => {
-    if (!open) return;
-    const close = () => (open = false);
-    const onDown = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (triggerEl?.contains(t) || (t instanceof Element && t.closest("[data-select-menu]"))) return;
-      open = false;
-    };
-    window.addEventListener("pointerdown", onDown, true);
-    window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true);
-    return () => {
-      window.removeEventListener("pointerdown", onDown, true);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
-    };
+    internal = value;
   });
 
-  // Flip above the trigger when it'd overflow the viewport bottom.
-  const below = $derived(rect ? window.innerHeight - rect.bottom > 240 || rect.top < 260 : true);
+  function onValueChange(v: string) {
+    const o = options.find((x) => x.value === v);
+    if (o?.action) {
+      internal = value; // undo the transient selection of the action row
+      onAction?.(v);
+      return;
+    }
+    value = v;
+    onChange?.(v);
+  }
 </script>
 
-<button
-  bind:this={triggerEl}
-  type="button"
-  {disabled}
-  onclick={toggle}
-  class="flex items-center justify-between gap-2 h-9 w-full rounded-md border border-border bg-surface px-3
-    text-sm text-ink hover:bg-surface-3 disabled:opacity-50 transition-colors"
->
-  <span class="truncate {selected ? '' : 'text-ink-3'}">{selected?.label ?? placeholder}</span>
-  <ChevronDown size={15} class="text-ink-3 shrink-0 transition-transform {open ? 'rotate-180' : ''}" />
-</button>
-
-{#if open && rect}
-  <div use:portal>
-    <div
-      data-select-menu
-      class="fixed z-[95] max-h-60 overflow-y-auto rounded-md border border-border bg-surface-2 p-1
-        shadow-2xl shadow-black/50 animate-fade-in"
-      style="left:{rect.left}px; width:{rect.width}px; {below
-        ? `top:${rect.bottom + 4}px`
-        : `bottom:${window.innerHeight - rect.top + 4}px`}"
+<Select.Root type="single" bind:value={internal} {onValueChange} {disabled} allowDeselect={false}>
+  <Select.Trigger
+    class="flex items-center justify-between gap-2 h-9 w-full rounded-md border border-border bg-surface px-3
+      text-sm text-ink hover:bg-surface-3 disabled:opacity-50 transition-colors data-[state=open]:bg-surface-3"
+  >
+    <span class="truncate {selected ? '' : 'text-ink-3'}">{selected?.label ?? placeholder}</span>
+    <ChevronDown
+      size={15}
+      class="text-ink-3 shrink-0 transition-transform data-[state=open]:rotate-180"
+    />
+  </Select.Trigger>
+  <Select.Portal>
+    <Select.Content
+      sideOffset={4}
+      class="z-[95] w-[var(--bits-floating-anchor-width)] rounded-md border border-border bg-surface-2 p-1
+        shadow-2xl shadow-black/50 animate-menu-pop"
     >
-      {#each options as o (o.value)}
-        <button
-          type="button"
-          onclick={() => pick(o)}
-          class="flex items-center gap-2 w-full rounded-sm px-2 py-1.5 text-sm text-left transition-colors
-            {o.action ? 'text-accent hover:bg-accent-dim' : 'text-ink hover:bg-surface-3'}"
-        >
-          <span class="w-4 shrink-0 flex justify-center">
-            {#if !o.action && o.value === value}<Check size={14} class="text-accent" />{/if}
-          </span>
-          <span class="truncate">{o.label}</span>
-        </button>
-      {/each}
-    </div>
-  </div>
-{/if}
+      <Select.Viewport class="max-h-60 overflow-y-auto">
+        {#each options as o (o.value)}
+          <Select.Item
+            value={o.value}
+            label={o.label}
+            class="flex items-center gap-2 w-full rounded-sm px-2 py-1.5 text-sm text-left cursor-pointer
+              transition-colors outline-none data-[highlighted]:bg-surface-3
+              {o.action ? 'text-accent' : 'text-ink'}"
+          >
+            {#snippet children({ selected: isSel })}
+              <span class="w-4 shrink-0 flex justify-center">
+                {#if !o.action && isSel}<Check size={14} class="text-accent" />{/if}
+              </span>
+              <span class="truncate">{o.label}</span>
+            {/snippet}
+          </Select.Item>
+        {/each}
+      </Select.Viewport>
+    </Select.Content>
+  </Select.Portal>
+</Select.Root>

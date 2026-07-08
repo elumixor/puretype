@@ -22,6 +22,7 @@
     "@capgo/capacitor-social-login": "^8.3.22",
     "audiomotion-analyzer": "^4.5.4",
     "backend": "workspace:*",
+    "bits-ui": "^2.18.1",
     "emoji-picker-element": "^1.29.1",
     "lucide-svelte": "^1.0.1"
   },
