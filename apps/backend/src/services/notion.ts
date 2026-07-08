@@ -135,14 +135,59 @@ export interface NotionPropertyValue {
   select?: { name: string } | null;
 }
 
-export async function queryDatabase(token: string, databaseId: string): Promise<NotionPageValue[]> {
+// ---- row-sync filters ------------------------------------------------------
+
+// A user-defined condition constraining which rows sync. Stored as JSON on the
+// source; kept deliberately narrow (the property types we can render a picker
+// for). `property` is the Notion property id; Notion's query API accepts it in
+// the `property` field of a filter clause.
+export interface NotionFilterCondition {
+  property: string;
+  type: "status" | "select" | "checkbox";
+  operator: "is" | "is_not";
+  value: string | null; // option name for status/select; ignored for checkbox
+}
+
+export function parseFilters(json: string | null | undefined): NotionFilterCondition[] {
+  if (!json) return [];
+  try {
+    const a = JSON.parse(json);
+    return Array.isArray(a) ? (a as NotionFilterCondition[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+// Build a Notion query `filter` object from the stored conditions (AND-joined),
+// or undefined when there's nothing to apply.
+export function buildNotionFilter(conditions: NotionFilterCondition[]): unknown | undefined {
+  const clauses = conditions
+    .filter((c) => c.property && (c.type === "checkbox" || c.value))
+    .map((c) => {
+      if (c.type === "checkbox") return { property: c.property, checkbox: { equals: c.operator !== "is_not" } };
+      const cmp = c.operator === "is_not" ? "does_not_equal" : "equals";
+      return { property: c.property, [c.type]: { [cmp]: c.value } };
+    });
+  if (!clauses.length) return undefined;
+  return clauses.length === 1 ? clauses[0] : { and: clauses };
+}
+
+export async function queryDatabase(
+  token: string,
+  databaseId: string,
+  filter?: unknown,
+): Promise<NotionPageValue[]> {
   const out: NotionPageValue[] = [];
   let cursor: string | undefined;
   do {
     const res = await fetch(`${API}/databases/${databaseId}/query`, {
       method: "POST",
       headers: authHeaders(token),
-      body: JSON.stringify({ page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) }),
+      body: JSON.stringify({
+        page_size: 100,
+        ...(filter ? { filter } : {}),
+        ...(cursor ? { start_cursor: cursor } : {}),
+      }),
     });
     if (!res.ok) throw new Error(`notion query failed: ${res.status}`);
     const j = (await res.json()) as { results: NotionPageValue[]; next_cursor: string | null; has_more: boolean };

@@ -92,6 +92,7 @@ model NotionSource {
   statusPropertyId String?       // property representing "done"
   statusPropType   String?       // "checkbox" | "status" | "select"
   doneValue        String?       // status/select option name that means done
+  filters          String?       // JSON array of row-sync filter conditions
   lastSyncedAt     DateTime?
   createdAt        DateTime      @default(now())
 

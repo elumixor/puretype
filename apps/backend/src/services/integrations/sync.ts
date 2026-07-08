@@ -104,7 +104,8 @@ export async function syncCalendarSource(source: CalendarSource & { account: Goo
 // ---- Notion ----------------------------------------------------------------
 
 export async function syncNotionSource(source: NotionSource & { account: NotionAccount }): Promise<void> {
-  const pages = await notion.queryDatabase(source.account.accessToken, source.databaseId);
+  const filter = notion.buildNotionFilter(notion.parseFilters(source.filters));
+  const pages = await notion.queryDatabase(source.account.accessToken, source.databaseId, filter);
 
   const seen = new Set<string>();
   for (const page of pages) {

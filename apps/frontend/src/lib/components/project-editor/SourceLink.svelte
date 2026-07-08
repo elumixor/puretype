@@ -5,6 +5,7 @@
   import { sync } from "$lib/sync.svelte";
   import BrandIcon from "../icons/BrandIcon.svelte";
   import Select from "../ui/Select.svelte";
+  import NotionFilters, { type Condition } from "./NotionFilters.svelte";
 
   // Shows the external source(s) a project is bound to (Google calendar / Notion
   // database) with detach + (Notion) reconfigure of the date/done mapping.
@@ -20,6 +21,7 @@
   let dDate = $state("");
   let dStatus = $state("");
   let dDone = $state("");
+  let dFilters = $state<Condition[]>([]);
 
   const dateProps = $derived(dbProps.filter((p) => p.type === "date"));
   const statusProps = $derived(dbProps.filter((p) => ["checkbox", "status", "select"].includes(p.type)));
@@ -45,6 +47,16 @@
     ),
   );
   const hasAny = $derived(calSources.length > 0 || notionSources.length > 0);
+
+  function parseFilters(json: string | null | undefined): Condition[] {
+    if (!json) return [];
+    try {
+      const a = JSON.parse(json);
+      return Array.isArray(a) ? (a as Condition[]) : [];
+    } catch {
+      return [];
+    }
+  }
 
   async function load() {
     overview = await api.integrations.$get();
@@ -78,6 +90,7 @@
     dDate = s.datePropertyId ?? "";
     dStatus = s.statusPropertyId ?? "";
     dDone = s.doneValue ?? "";
+    dFilters = parseFilters(s.filters);
     const r = await api.integrations.notion.properties.$post({ accountId: s.accountId, databaseId: s.databaseId });
     dbProps = r.properties;
   }
@@ -96,6 +109,7 @@
         statusPropertyId: dStatus || null,
         statusPropType,
         doneValue: statusPropType === "checkbox" ? null : dDone || null,
+        filters: dFilters,
       });
       editing = null;
       await load();
@@ -167,6 +181,7 @@
                 <Select bind:value={dDone} options={doneValueOptions} />
               </div>
             {/if}
+            <NotionFilters properties={dbProps} bind:conditions={dFilters} />
             <button
               type="button"
               onclick={() => saveReconfigure(s)}

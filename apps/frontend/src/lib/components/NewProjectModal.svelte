@@ -5,6 +5,7 @@
   import { portal } from "$lib/portal";
   import { projects } from "$lib/projects.svelte";
   import { sync } from "$lib/sync.svelte";
+  import NotionFilters, { type Condition } from "./project-editor/NotionFilters.svelte";
   import Select from "./ui/Select.svelte";
 
   // Where the "add project" flow lives: blank, or a project bound to a Google
@@ -38,6 +39,7 @@
   let nDate = $state("");
   let nStatus = $state("");
   let nDone = $state("");
+  let nFilters = $state<Condition[]>([]);
 
   const dateProps = $derived(properties.filter((p) => p.type === "date"));
   const statusProps = $derived(properties.filter((p) => ["checkbox", "status", "select"].includes(p.type)));
@@ -188,6 +190,7 @@
     nDbId = databaseId;
     properties = [];
     nDate = nStatus = nDone = "";
+    nFilters = [];
     name = databases.find((d) => d.id === databaseId)?.title ?? name;
     if (!databaseId) return;
     try {
@@ -213,6 +216,7 @@
           statusPropertyId: nStatus || null,
           statusPropType,
           doneValue: statusPropType === "checkbox" ? null : nDone || null,
+          filters: nFilters,
         })
         .then(() => {}),
     );
@@ -342,6 +346,7 @@
               <Select bind:value={nDone} options={doneValueOptions} />
             </div>
           {/if}
+          <NotionFilters {properties} bind:conditions={nFilters} />
         {/if}
       </div>
     {/if}
