@@ -2,6 +2,7 @@
   import { Loader2, Settings2, Trash2 } from "lucide-svelte";
   import { onMount } from "svelte";
   import { api } from "$lib/api/client";
+  import { projects } from "$lib/projects.svelte";
   import { sync } from "$lib/sync.svelte";
   import BrandIcon from "../icons/BrandIcon.svelte";
   import Select from "../ui/Select.svelte";
@@ -60,6 +61,10 @@
 
   async function load() {
     overview = await api.integrations.$get();
+    const ids = new Set<string>();
+    for (const a of overview.google.accounts) for (const s of a.calendarSources) ids.add(s.projectId);
+    for (const a of overview.notion.accounts) for (const s of a.notionSources) ids.add(s.projectId);
+    projects.setLinked(ids);
   }
   onMount(load);
 

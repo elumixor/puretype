@@ -32,12 +32,21 @@ export async function applyProjectOp(
       if (cur.updatedAt > new Date(op.clientUpdatedAt)) return { ok: false, reason: "conflict" };
       const { parentIds, ...scalar } = op.patch;
       if (parentIds !== undefined) {
+        // Source-linked (Google/Notion) projects aren't nestable — neither as a
+        // child nor as a parent. Drop any such relationship defensively.
+        const candidateIds = [op.id, ...parentIds];
+        const [cals, nots] = await Promise.all([
+          prisma.calendarSource.findMany({ where: { userId, projectId: { in: candidateIds } }, select: { projectId: true } }),
+          prisma.notionSource.findMany({ where: { userId, projectId: { in: candidateIds } }, select: { projectId: true } }),
+        ]);
+        const linked = new Set([...cals, ...nots].map((s) => s.projectId));
+        const effectiveParents = linked.has(op.id) ? [] : parentIds.filter((pid) => !linked.has(pid));
         await prisma.$transaction([
           prisma.projectParent.deleteMany({ where: { childId: op.id } }),
-          ...(parentIds.length
+          ...(effectiveParents.length
             ? [
                 prisma.projectParent.createMany({
-                  data: parentIds.map((pid) => ({ childId: op.id, parentId: pid })),
+                  data: effectiveParents.map((pid) => ({ childId: op.id, parentId: pid })),
                 }),
               ]
             : []),

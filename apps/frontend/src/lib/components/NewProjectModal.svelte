@@ -91,6 +91,7 @@
       }
       projects.toggleFilter(project.id);
       sync.schedule(0);
+      void projects.refreshLinks();
       onClose();
     } catch (e) {
       error = e instanceof Error ? e.message : "Couldn't create project";

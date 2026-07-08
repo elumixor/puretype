@@ -1,3 +1,4 @@
+import { api } from "$lib/api/client";
 import type { Project } from "$lib/api";
 import { newId } from "$lib/db/id";
 import { del, getAll, put, putMany } from "$lib/db/idb";
@@ -24,8 +25,32 @@ class ProjectsStore {
   private previousFilterId: string | null = null;
   private booted = false;
 
+  // Projects bound to an external source (Google/Notion). Source-linked
+  // projects aren't nestable. Populated from the integrations overview.
+  linkedIds = $state<Set<string>>(new Set());
+
   isMuted(id: string): boolean {
     return this.mutedIds.has(id);
+  }
+
+  isLinked(id: string): boolean {
+    return this.linkedIds.has(id);
+  }
+
+  setLinked(ids: Iterable<string>) {
+    this.linkedIds = new Set(ids);
+  }
+
+  async refreshLinks() {
+    try {
+      const ov = await api.integrations.$get();
+      const ids = new Set<string>();
+      for (const a of ov.google.accounts) for (const s of a.calendarSources) ids.add(s.projectId);
+      for (const a of ov.notion.accounts) for (const s of a.notionSources) ids.add(s.projectId);
+      this.linkedIds = ids;
+    } catch {
+      // offline / auth not ready — keep whatever we had
+    }
   }
 
   toggleMuted(id: string) {
@@ -78,6 +103,7 @@ class ProjectsStore {
       this.reconcileFilters();
     });
     sync.schedule(0);
+    void this.refreshLinks();
   }
 
   byId(id: string | null | undefined): Project | undefined {

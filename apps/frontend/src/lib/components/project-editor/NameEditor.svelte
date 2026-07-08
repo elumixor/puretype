@@ -8,6 +8,7 @@
     name = $bindable<string>(),
     parents,
     selfId,
+    canNest = true,
     onCommit,
     onCancel,
     onAddParent,
@@ -15,6 +16,7 @@
     name: string;
     parents: string[];
     selfId: string;
+    canNest?: boolean;
     onCommit: () => void;
     onCancel: () => void;
     onAddParent: (p: Project) => void;
@@ -28,7 +30,8 @@
   let mEnd = 0;
 
   function detectMention() {
-    if (!nameEl) return (mentionOpen = false);
+    // Source-linked projects (Google/Notion) aren't nestable.
+    if (!canNest || !nameEl) return (mentionOpen = false);
     const caret = nameEl.selectionStart ?? name.length;
     const m = name.slice(0, caret).match(/@([^\s@]*)$/);
     if (!m) return (mentionOpen = false);
@@ -38,8 +41,9 @@
     // Exclude self + all descendants (cycle-safe) and already-added parents.
     const exclude = projects.descendantIds(selfId);
     for (const id of parents) exclude.add(id);
+    // A source-linked project can't be a parent either.
     mentionItems = projects.list
-      .filter((p) => !exclude.has(p.id) && (!q || p.name.toLowerCase().includes(q)))
+      .filter((p) => !exclude.has(p.id) && !projects.isLinked(p.id) && (!q || p.name.toLowerCase().includes(q)))
       .sort((a, b) => {
         const as = a.name.toLowerCase().startsWith(q) ? 0 : 1;
         const bs = b.name.toLowerCase().startsWith(q) ? 0 : 1;

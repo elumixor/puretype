@@ -21,6 +21,8 @@
   /* svelte-ignore state_referenced_locally */
   let tab = $state<"auto" | "emoji" | "image">(project.avatarType as "auto" | "emoji" | "image");
   const live = $derived(projects.byId(project.id) ?? project);
+  // Source-linked (Google/Notion) projects can't be nested.
+  const linked = $derived(projects.isLinked(project.id));
   let confirmDelete = $state(false);
 
   // parentsDraft mirrors persisted parentIds while editing so the UI reflects
@@ -93,6 +95,7 @@
         bind:name={nameDraft}
         parents={parentsDraft}
         selfId={project.id}
+        canNest={!linked}
         onCommit={commit}
         onCancel={cancel}
         onAddParent={(p) => (parentsDraft = [...parentsDraft, p.id])}
@@ -112,7 +115,11 @@
             </button>
           </span>
         {:else}
-          <span class="text-[11px] text-[var(--color-ink-3)]">Type @ to nest under another project</span>
+          {#if linked}
+            <span class="text-[11px] text-[var(--color-ink-3)]">Linked projects can’t be nested</span>
+          {:else}
+            <span class="text-[11px] text-[var(--color-ink-3)]">Type @ to nest under another project</span>
+          {/if}
         {/each}
       </div>
     </div>
