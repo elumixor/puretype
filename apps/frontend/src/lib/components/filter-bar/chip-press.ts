@@ -1,19 +1,19 @@
 import type { Project } from "$lib/api";
 import { tapMedium } from "$lib/haptics";
-import { projects } from "$lib/projects.svelte";
 import { chipDrag } from "./chip-drag.svelte";
 
 const MOVE_THRESHOLD = 6;
 const LONG_PRESS_MS = 450;
 
 // Chip gesture (mirrors the task row gesture):
-//   - tap (quick release, no move)     → toggle the project's task visibility
+//   - tap (quick release, no move)     → open the project's details
 //   - move before the long-press fires → it's a horizontal bar scroll; bail
 //   - hold still LONG_PRESS_MS         → open the context menu
 //   - move *after* the menu opened     → close the menu and start a reorder
 export function makeChipPressHandler(
   onOpenMenu: (p: Project, x: number, y: number) => void,
   onCloseMenu: () => void,
+  onTap: (p: Project) => void,
 ) {
   return (e: PointerEvent, p: Project) => {
     if (e.button !== undefined && e.button !== 0) return;
@@ -59,9 +59,9 @@ export function makeChipPressHandler(
     const onUp = () => {
       const tapped = !longPressed && !bailed && !dragging;
       cleanup();
-      // Quick tap toggles this project's task visibility. After a long-press the
-      // menu stays open; after a drag the reorder already committed.
-      if (tapped) projects.toggleMuted(p.id);
+      // Quick tap opens the project's details. After a long-press the menu stays
+      // open; after a drag the reorder already committed.
+      if (tapped) onTap(p);
     };
     const onCancel = () => cleanup();
 

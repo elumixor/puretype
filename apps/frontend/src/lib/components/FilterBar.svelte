@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Eye, EyeOff, Plus, Settings2, X } from "lucide-svelte";
+  import { Eye, EyeOff, Plus, X } from "lucide-svelte";
   import { untrack } from "svelte";
   import type { Project } from "$lib/api";
   import { applyCap, toCapMode } from "$lib/capitalize";
@@ -46,6 +46,7 @@
   const onChipPointerDown = makeChipPressHandler(
     (project, x, y) => (menu = { project, x, y }),
     () => (menu = null),
+    (project) => (editing = project),
   );
   const onChipContextMenu = (e: MouseEvent, project: Project) => {
     e.preventDefault();
@@ -110,16 +111,20 @@
           <ProjectAvatar project={p} size={18} />
           <span class={isCol ? "truncate" : ""}>{applyCap(p.name, toCapMode(p.capitalization), true)}</span>
         </div>
-        {#if activeFilter}
-          <button
-            onpointerdown={(e) => e.stopPropagation()}
-            onclick={() => (editing = p)}
-            aria-label="Customize project"
-            class="pr-2 text-[var(--color-accent)]/70 hover:text-[var(--color-accent)]"
-          >
-            <Settings2 size={13} />
-          </button>
-        {/if}
+        <button
+          onpointerdown={(e) => e.stopPropagation()}
+          onclick={(e) => {
+            e.stopPropagation();
+            projects.toggleMuted(p.id);
+          }}
+          aria-label={muted ? "Show this project's tasks" : "Hide this project's tasks"}
+          title={muted ? "Show tasks" : "Hide tasks"}
+          class="pr-2 pl-0.5 shrink-0 {activeFilter
+            ? 'text-[var(--color-accent)]/70 hover:text-[var(--color-accent)]'
+            : 'text-ink-3 hover:text-ink'} transition-colors"
+        >
+          {#if muted}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
+        </button>
       </div>
     {/each}
     {#if !isCol && chipDrag.draggingId && chipDrag.dropIndex === visibleNoDrag.length}
