@@ -70,8 +70,9 @@
         {fmtDuration(seg.minutes)}
       </span>
     {:else if seg.kind === "repeat"}
-      <span class="pill pill-time" title={repeatLabel(seg.code)} aria-label={repeatLabel(seg.code)}>
+      <span class="pill pill-time">
         <Repeat size={12} strokeWidth={2.5} />
+        {repeatLabel(seg.code)}
       </span>
     {:else if seg.kind === "place"}
       <a

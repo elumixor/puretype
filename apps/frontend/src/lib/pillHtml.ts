@@ -1,7 +1,7 @@
 import type { Project } from "$lib/api";
 import { applyCap, sentenceStartFlags, toCapMode } from "$lib/capitalize";
 import { marbleSvg } from "$lib/marble";
-import { fmtDateTime, fmtDuration, fmtLinkLabel, parseSegments, type Segment } from "$lib/tokens";
+import { fmtDateTime, fmtDuration, fmtLinkLabel, parseSegments, repeatLabel, type Segment } from "$lib/tokens";
 
 const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
@@ -42,7 +42,7 @@ function pillInner(seg: Segment, atSentenceStart = true): string {
   if (seg.kind === "place")
     return `${MAPPIN}<span class="pill-place-name" title="${esc(seg.name)}">${esc(seg.name)}</span>`;
   if (seg.kind === "link") return `${LINK}<span>${esc(fmtLinkLabel(seg.url))}</span>`;
-  if (seg.kind === "repeat") return REPEAT; // icon only, no label (matches display)
+  if (seg.kind === "repeat") return `${REPEAT}<span>${esc(repeatLabel(seg.code))}</span>`;
   return "";
 }
 

@@ -62,7 +62,18 @@ export async function syncCalendarSource(source: CalendarSource & { account: Goo
     const startRawMs = new Date(startRaw).getTime();
     const duration = timed && endRaw ? Math.round((new Date(endRaw).getTime() - startRawMs) / 60000) : null;
     const summary = (ev.summary ?? "").trim() || "(untitled event)";
-    const text = repeatCode ? `${summary} @repeat:${repeatCode}` : summary;
+
+    // Surface the date/time in the task itself as a "@time:" token (a Clock pill
+    // on the client). One-off events keep their exact wall-clock from Google;
+    // recurring ones use the next occurrence's date + the series' time-of-day.
+    const timeTok = repeatCode
+      ? timed
+        ? `${scheduledAt.toISOString().slice(0, 10)}T${startRaw.slice(11, 16)}`
+        : scheduledAt.toISOString().slice(0, 10)
+      : timed
+        ? startRaw.slice(0, 16) // "YYYY-MM-DDTHH:MM"
+        : startRaw; // all-day: "YYYY-MM-DD"
+    const text = `${summary} @time:${timeTok}${repeatCode ? ` @repeat:${repeatCode}` : ""}`;
     const externalUpdatedAt = ev.updated ? new Date(ev.updated) : null;
 
     await prisma.task.upsert({

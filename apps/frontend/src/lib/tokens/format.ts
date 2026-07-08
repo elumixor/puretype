@@ -34,24 +34,24 @@ const DAY_LABEL: Record<string, string> = {
   SU: "Sun",
 };
 
-// Human description of a compact recurrence code (see tokens/regex). Used as the
-// tooltip on the repeat pill, which itself only shows an icon.
+// Human description of a compact recurrence code (see tokens/regex), shown as
+// the label on the repeat pill (lowercase — it reads inline like "every week").
 export function repeatLabel(code: string): string {
   const m = code.match(/^(\d+)([dwmy])(?::(.+))?$/);
-  if (!m) return "Repeats";
+  if (!m) return "repeats";
   const n = Number(m[1]);
   const unit = m[2];
   const detail = m[3];
-  if (unit === "d") return n > 1 ? `Every ${n} days` : "Every day";
-  if (unit === "y") return n > 1 ? `Every ${n} years` : "Every year";
-  if (unit === "m") return detail ? `Monthly on day ${detail}` : n > 1 ? `Every ${n} months` : "Every month";
+  if (unit === "d") return n > 1 ? `every ${n} days` : "every day";
+  if (unit === "y") return n > 1 ? `every ${n} years` : "every year";
+  if (unit === "m") return detail ? `monthly on day ${detail}` : n > 1 ? `every ${n} months` : "every month";
   const days = detail
     ? detail
         .split(",")
         .map((d) => DAY_LABEL[d] ?? d)
         .join(", ")
     : "";
-  const base = n > 1 ? `Every ${n} weeks` : "Weekly";
+  const base = n > 1 ? `every ${n} weeks` : "weekly";
   return days ? `${base} on ${days}` : base;
 }
 
