@@ -81,6 +81,9 @@ export const ProjectDelete = z.object({
   kind: z.literal("project.delete"),
   id: z.string().min(1),
   clientUpdatedAt: z.string(),
+  // "clear" (default): keep the project's tasks but orphan them (drop the
+  // project reference). "purge": delete the tasks too.
+  mode: z.enum(["clear", "purge"]).optional(),
 });
 
 export const Op = z.union([

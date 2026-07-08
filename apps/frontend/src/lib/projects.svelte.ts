@@ -139,7 +139,10 @@ class ProjectsStore {
     return updated;
   }
 
-  async remove(id: string) {
+  // mode "clear" (default) keeps the project's tasks but orphans them; "purge"
+  // deletes the tasks too. The server applies the task changes and detaches any
+  // external source; they arrive back on the next pull.
+  async remove(id: string, mode: "clear" | "purge" = "clear") {
     const cur = this.byId(id);
     if (!cur) return;
     this.list = this.list.filter((p) => p.id !== id);
@@ -150,6 +153,7 @@ class ProjectsStore {
       kind: "project.delete",
       id,
       clientUpdatedAt: cur.updatedAt as unknown as string,
+      mode,
     });
     sync.schedule(0);
   }

@@ -60,9 +60,9 @@
     busy = false;
   }
 
-  async function remove() {
+  async function remove(mode: "clear" | "purge") {
     busy = true;
-    await projects.remove(project.id);
+    await projects.remove(project.id, mode);
     onClose();
   }
 

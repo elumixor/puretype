@@ -14,23 +14,34 @@
     confirming: boolean;
     label: string;
     onToggleHidden: () => void;
-    onDelete: () => void;
+    onDelete: (mode: "clear" | "purge") => void;
   } = $props();
 </script>
 
 {#if confirming}
-  <div class="flex items-center gap-2">
+  <div class="space-y-2">
+    <p class="text-[12px] text-[var(--color-ink-3)] text-center">Delete “{label}”?</p>
     <button
-      onclick={onDelete}
+      onclick={() => onDelete("clear")}
       disabled={busy}
-      class="flex-1 py-2.5 rounded-2xl bg-[var(--color-danger)] text-white text-[13px] font-medium
-        active:scale-[0.98] transition-transform disabled:opacity-50"
+      class="w-full px-3 py-2.5 rounded-md border border-border bg-surface text-left
+        hover:bg-surface-3 transition-colors disabled:opacity-50"
     >
-      Delete “{label}”
+      <span class="block text-[13px] font-medium text-ink">Clear project</span>
+      <span class="block text-[11px] text-ink-3">Keep the tasks, just remove them from this project</span>
+    </button>
+    <button
+      onclick={() => onDelete("purge")}
+      disabled={busy}
+      class="w-full px-3 py-2.5 rounded-md border border-[var(--color-danger)]/40 bg-[var(--color-danger-glow)] text-left
+        hover:bg-[var(--color-danger)]/20 transition-colors disabled:opacity-50"
+    >
+      <span class="block text-[13px] font-medium text-[var(--color-danger)]">Delete tasks</span>
+      <span class="block text-[11px] text-[var(--color-danger)]/80">Delete the project and all of its tasks</span>
     </button>
     <button
       onclick={() => (confirming = false)}
-      class="px-4 py-2.5 rounded-2xl bg-[var(--color-surface)] text-[13px] font-medium text-[var(--color-ink-2)]"
+      class="w-full py-2 rounded-md text-[12px] font-medium text-[var(--color-ink-2)] hover:bg-surface-3 transition-colors"
     >
       Cancel
     </button>

@@ -68,7 +68,7 @@ export type Op =
         parentIds: string[];
       }>;
     }
-  | { kind: "project.delete"; id: string; clientUpdatedAt: string };
+  | { kind: "project.delete"; id: string; clientUpdatedAt: string; mode?: "clear" | "purge" };
 
 export type OutboxEntry = {
   seq?: number; // assigned by IDB autoIncrement
