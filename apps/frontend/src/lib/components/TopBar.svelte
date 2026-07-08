@@ -38,12 +38,11 @@
       <div class="flex-1 min-w-0">
         <button
           onclick={() => (projectsOpen = true)}
-          class="wide:hidden flex items-center gap-2 pl-2.5 pr-3.5 py-1.5 rounded-full
-            border border-[var(--color-border)] bg-[var(--color-surface)] text-[13px] font-medium
-            text-[var(--color-ink-2)] hover:text-[var(--color-ink)] hover:border-[var(--color-border-hover)]
-            transition-colors"
+          class="wide:hidden inline-flex items-center gap-2 h-9 pl-3 pr-3.5 rounded-md
+            border border-border bg-surface text-[13px] font-medium
+            text-ink-2 hover:text-ink hover:bg-surface-3 transition-colors"
         >
-          <FolderTree size={15} strokeWidth={1.75} />
+          <FolderTree size={15} strokeWidth={2} />
           Projects
         </button>
       </div>
@@ -62,18 +61,18 @@
   <div use:portal>
     <button
       aria-label="Close projects"
-      class="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm animate-fade-in"
+      class="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm animate-fade-in"
       onclick={() => (projectsOpen = false)}
     ></button>
     <div
       role="dialog"
       aria-label="Projects"
-      class="fixed z-[61] left-3 right-3 max-w-sm rounded-3xl p-3
-        bg-[var(--color-surface-2)] border border-[var(--color-border)]
-        shadow-2xl shadow-black/50 animate-scale-in max-h-[70vh] overflow-y-auto no-scrollbar"
+      class="fixed z-[61] left-3 right-3 max-w-sm mx-auto rounded-xl p-2
+        bg-surface-2 border border-border shadow-2xl shadow-black/50 animate-scale-in
+        max-h-[70vh] overflow-y-auto no-scrollbar"
       style="top: calc(env(safe-area-inset-top, 0px) + 3.5rem);"
     >
-      <div class="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-ink-3)]">
+      <div class="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-3">
         Projects
       </div>
       <FilterBar layout="column" />

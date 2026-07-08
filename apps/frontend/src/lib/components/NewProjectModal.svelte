@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Calendar, FileText, FolderPlus, Loader2 } from "lucide-svelte";
+  import { Calendar, ChevronRight, FileText, FolderPlus, Loader2, Plus } from "lucide-svelte";
   import { onMount, tick } from "svelte";
   import { api } from "$lib/api/client";
   import { portal } from "$lib/portal";
@@ -30,6 +30,7 @@
   let gAccountId = $state("");
   let calendars = $state<{ id: string; name: string; primary: boolean }[]>([]);
   let gCalId = $state("");
+  let loadingList = $state(false);
 
   // Notion
   let nAccountId = $state("");
@@ -112,12 +113,15 @@
     calendars = [];
     gCalId = "";
     error = null;
+    loadingList = true;
     try {
       const r = await api.integrations.google.calendars.$post({ accountId: gAccountId });
       calendars = r.calendars;
       gCalId = r.calendars.find((c) => c.primary)?.id ?? r.calendars[0]?.id ?? "";
     } catch (e) {
       error = e instanceof Error ? e.message : "Couldn't load calendars";
+    } finally {
+      loadingList = false;
     }
   }
   async function createGoogle() {
@@ -145,11 +149,14 @@
     nDbId = "";
     properties = [];
     error = null;
+    loadingList = true;
     try {
       const r = await api.integrations.notion.databases.$post({ accountId: nAccountId });
       databases = r.databases;
     } catch (e) {
       error = e instanceof Error ? e.message : "Couldn't load databases";
+    } finally {
+      loadingList = false;
     }
   }
   async function onPickDb(databaseId: string) {
@@ -186,7 +193,8 @@
   }
 
   // Kick off OAuth. Remember which source we were adding so the app can reopen
-  // this modal on the redirect back (see routes/+page.svelte).
+  // this modal on the redirect back (see routes/+page.svelte). Works both for a
+  // first connect and for adding another account/workspace.
   async function connect(provider: "google" | "notion") {
     busy = true;
     error = null;
@@ -204,133 +212,165 @@
     }
   }
 
-  const selectCls =
-    "w-full h-10 px-2.5 rounded-xl bg-[var(--color-surface)] text-[13px] text-[var(--color-ink)] border border-[var(--color-border)]";
+  const inputCls =
+    "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-ink focus:outline-none focus:border-accent transition-colors";
+  const labelCls = "block text-[11px] font-medium uppercase tracking-wider text-ink-3";
 </script>
 
-<button aria-label="Close" class="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm animate-fade-in" onclick={onClose}
-></button>
-<div
-  role="dialog"
-  aria-label="New project"
-  class="fixed left-1/2 top-1/4 -translate-x-1/2 -translate-y-1/4 z-[61] w-[min(92vw,380px)]
-    p-5 rounded-3xl bg-[var(--color-surface-2)] border border-[var(--color-border)]
-    shadow-2xl shadow-black/50 animate-scale-in max-h-[80vh] overflow-y-auto"
->
-  <h2 class="text-sm font-semibold mb-4">New project</h2>
-
-  {#if step === "choose"}
-    <div class="space-y-2">
-      <button
-        type="button"
-        onclick={chooseBlank}
-        class="w-full flex items-center gap-3 h-12 px-3.5 rounded-2xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-3)] transition-colors text-left"
-      >
-        <FolderPlus size={18} class="text-[var(--color-ink-2)]" />
-        <span class="text-sm font-medium">Blank project</span>
-      </button>
-      {#if overview?.google.configured}
-        <button
-          type="button"
-          onclick={chooseGoogle}
-          disabled={busy}
-          class="w-full flex items-center gap-3 h-12 px-3.5 rounded-2xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-3)] transition-colors text-left disabled:opacity-50"
-        >
-          <Calendar size={18} class="text-[var(--color-ink-2)]" />
-          <span class="text-sm font-medium">From Google Calendar</span>
-          {#if !overview.google.accounts.length}<span class="ml-auto text-[11px] text-[var(--color-ink-3)]">Connect</span>{/if}
-        </button>
-      {/if}
-      {#if overview?.notion.configured}
-        <button
-          type="button"
-          onclick={chooseNotion}
-          disabled={busy}
-          class="w-full flex items-center gap-3 h-12 px-3.5 rounded-2xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-3)] transition-colors text-left disabled:opacity-50"
-        >
-          <FileText size={18} class="text-[var(--color-ink-2)]" />
-          <span class="text-sm font-medium">From Notion</span>
-          {#if !overview.notion.accounts.length}<span class="ml-auto text-[11px] text-[var(--color-ink-3)]">Connect</span>{/if}
-        </button>
-      {/if}
+<div use:portal>
+  <button
+    aria-label="Close"
+    class="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm animate-fade-in"
+    onclick={onClose}
+  ></button>
+  <div
+    role="dialog"
+    aria-label="New project"
+    class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[91] w-[min(92vw,400px)]
+      rounded-xl border border-border bg-surface-2 p-5 shadow-2xl shadow-black/50 animate-scale-in
+      max-h-[85vh] overflow-y-auto"
+  >
+    <div class="mb-4">
+      <h2 class="text-[15px] font-semibold tracking-tight text-ink">New project</h2>
+      <p class="text-xs text-ink-3 mt-0.5">
+        {#if step === "choose"}Start blank or pull items from a connected source.
+        {:else if step === "blank"}Give it a name.
+        {:else if step === "google"}Pick a calendar to import its events.
+        {:else}Pick a database and map its date and done fields.{/if}
+      </p>
     </div>
 
-  {:else if step === "blank"}
-    <input
-      bind:this={nameEl}
-      bind:value={name}
-      placeholder="Project name"
-      onkeydown={(e) => {
-        if (e.key === "Enter") createBlank();
-        else if (e.key === "Escape") (step = "choose");
-      }}
-      class="w-full h-11 px-3 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-ink)] focus:border-[var(--color-accent)] focus:outline-none"
-    />
-
-  {:else if step === "google"}
-    <div class="space-y-2.5">
-      {#if overview && overview.google.accounts.length > 1}
-        <select bind:value={gAccountId} onchange={loadCalendars} class={selectCls}>
-          {#each overview.google.accounts as a (a.id)}<option value={a.id}>{a.email}</option>{/each}
-        </select>
-      {/if}
-      <select bind:value={gCalId} class={selectCls}>
-        {#each calendars as c (c.id)}<option value={c.id}>{c.name}{c.primary ? " (primary)" : ""}</option>{/each}
-      </select>
-      <p class="text-[11px] text-[var(--color-ink-3)]">A project named after the calendar will be created and its events imported.</p>
-    </div>
-
-  {:else if step === "notion"}
-    <div class="space-y-2.5">
-      {#if overview && overview.notion.accounts.length > 1}
-        <select bind:value={nAccountId} onchange={loadDatabases} class={selectCls}>
-          {#each overview.notion.accounts as a (a.id)}<option value={a.id}>{a.workspaceName}</option>{/each}
-        </select>
-      {/if}
-      <select value={nDbId} onchange={(e) => onPickDb(e.currentTarget.value)} class={selectCls}>
-        <option value="">Choose a database…</option>
-        {#each databases as d (d.id)}<option value={d.id}>{d.title}</option>{/each}
-      </select>
-      {#if nDbId}
-        <span class="block text-[10px] uppercase tracking-wider text-[var(--color-ink-3)]">Date property</span>
-        <select bind:value={nDate} class={selectCls}>
-          <option value="">None</option>
-          {#each dateProps as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-        </select>
-        <span class="block text-[10px] uppercase tracking-wider text-[var(--color-ink-3)]">Done property</span>
-        <select bind:value={nStatus} onchange={() => (nDone = "")} class={selectCls}>
-          <option value="">None</option>
-          {#each statusProps as p (p.id)}<option value={p.id}>{p.name} ({p.type})</option>{/each}
-        </select>
-        {#if doneOptions.length}
-          <span class="block text-[10px] uppercase tracking-wider text-[var(--color-ink-3)]">"Done" means</span>
-          <select bind:value={nDone} class={selectCls}>
-            <option value="">Choose…</option>
-            {#each doneOptions as o (o)}<option value={o}>{o}</option>{/each}
-          </select>
+    {#if step === "choose"}
+      <div class="space-y-1.5">
+        {#snippet chooser(Icon: typeof FolderPlus, label: string, sub: string | null, onclick: () => void, disabled = false)}
+          <button
+            type="button"
+            {onclick}
+            {disabled}
+            class="group w-full flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5
+              text-left hover:bg-surface-3 hover:border-border-hover transition-colors disabled:opacity-50"
+          >
+            <Icon size={17} class="text-ink-2 shrink-0" />
+            <span class="text-sm font-medium text-ink flex-1 min-w-0">{label}</span>
+            {#if sub}<span class="text-[11px] text-ink-3">{sub}</span>{/if}
+            <ChevronRight size={15} class="text-ink-3 group-hover:text-ink-2 transition-colors" />
+          </button>
+        {/snippet}
+        {@render chooser(FolderPlus, "Blank project", null, chooseBlank)}
+        {#if overview?.google.configured}
+          {@render chooser(Calendar, "Google Calendar", overview.google.accounts.length ? null : "Connect", chooseGoogle, busy)}
         {/if}
+        {#if overview?.notion.configured}
+          {@render chooser(FileText, "Notion", overview.notion.accounts.length ? null : "Connect", chooseNotion, busy)}
+        {/if}
+      </div>
+
+    {:else if step === "blank"}
+      <input
+        bind:this={nameEl}
+        bind:value={name}
+        placeholder="Project name"
+        onkeydown={(e) => {
+          if (e.key === "Enter") createBlank();
+          else if (e.key === "Escape") (step = "choose");
+        }}
+        class={inputCls}
+      />
+
+    {:else if step === "google"}
+      <div class="space-y-3">
+        {#if overview && overview.google.accounts.length}
+          <div class="space-y-1.5">
+            <span class={labelCls}>Account</span>
+            <select bind:value={gAccountId} onchange={loadCalendars} class={inputCls}>
+              {#each overview.google.accounts as a (a.id)}<option value={a.id}>{a.email}</option>{/each}
+            </select>
+          </div>
+        {/if}
+        <div class="space-y-1.5">
+          <span class={labelCls}>Calendar</span>
+          <select bind:value={gCalId} disabled={loadingList} class={inputCls}>
+            {#each calendars as c (c.id)}<option value={c.id}>{c.name}{c.primary ? " (primary)" : ""}</option>{/each}
+          </select>
+        </div>
+        <button type="button" onclick={() => connect("google")} disabled={busy}
+          class="inline-flex items-center gap-1.5 text-xs font-medium text-ink-3 hover:text-accent transition-colors disabled:opacity-50">
+          <Plus size={13} /> Connect another account
+        </button>
+      </div>
+
+    {:else if step === "notion"}
+      <div class="space-y-3">
+        {#if overview && overview.notion.accounts.length}
+          <div class="space-y-1.5">
+            <span class={labelCls}>Workspace</span>
+            <select bind:value={nAccountId} onchange={loadDatabases} class={inputCls}>
+              {#each overview.notion.accounts as a (a.id)}<option value={a.id}>{a.workspaceName}</option>{/each}
+            </select>
+          </div>
+        {/if}
+        <div class="space-y-1.5">
+          <span class={labelCls}>Database</span>
+          <select value={nDbId} onchange={(e) => onPickDb(e.currentTarget.value)} disabled={loadingList} class={inputCls}>
+            <option value="">{loadingList ? "Loading…" : "Choose a database…"}</option>
+            {#each databases as d (d.id)}<option value={d.id}>{d.title}</option>{/each}
+          </select>
+        </div>
+        {#if nDbId}
+          <div class="space-y-1.5">
+            <span class={labelCls}>Date property</span>
+            <select bind:value={nDate} class={inputCls}>
+              <option value="">None</option>
+              {#each dateProps as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
+            </select>
+          </div>
+          <div class="space-y-1.5">
+            <span class={labelCls}>Done property</span>
+            <select bind:value={nStatus} onchange={() => (nDone = "")} class={inputCls}>
+              <option value="">None</option>
+              {#each statusProps as p (p.id)}<option value={p.id}>{p.name} ({p.type})</option>{/each}
+            </select>
+          </div>
+          {#if doneOptions.length}
+            <div class="space-y-1.5">
+              <span class={labelCls}>"Done" means</span>
+              <select bind:value={nDone} class={inputCls}>
+                <option value="">Choose…</option>
+                {#each doneOptions as o (o)}<option value={o}>{o}</option>{/each}
+              </select>
+            </div>
+          {/if}
+        {/if}
+        <button type="button" onclick={() => connect("notion")} disabled={busy}
+          class="inline-flex items-center gap-1.5 text-xs font-medium text-ink-3 hover:text-accent transition-colors disabled:opacity-50">
+          <Plus size={13} /> Connect another workspace
+        </button>
+      </div>
+    {/if}
+
+    {#if error}<p class="text-xs text-danger mt-3">{error}</p>{/if}
+
+    <div class="flex justify-end gap-2 mt-5">
+      {#if step !== "choose"}
+        <button type="button" onclick={() => (step = "choose")}
+          class="inline-flex items-center justify-center h-9 px-4 rounded-md text-sm font-medium text-ink-2 hover:bg-surface-3 transition-colors">
+          Back
+        </button>
+      {/if}
+      {#if step === "blank"}
+        <button type="button" onclick={createBlank} disabled={busy || !name.trim()}
+          class="inline-flex items-center justify-center h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">Create</button>
+      {:else if step === "google"}
+        <button type="button" onclick={createGoogle} disabled={busy || !gCalId}
+          class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">
+          {#if busy}<Loader2 size={14} class="animate-spin" />{/if} Create
+        </button>
+      {:else if step === "notion"}
+        <button type="button" onclick={createNotion} disabled={busy || !nDbId}
+          class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">
+          {#if busy}<Loader2 size={14} class="animate-spin" />{/if} Create
+        </button>
       {/if}
     </div>
-  {/if}
-
-  {#if error}<p class="text-xs text-red-500 mt-3">{error}</p>{/if}
-
-  <div class="flex justify-end gap-2 mt-5">
-    {#if step !== "choose"}
-      <button type="button" onclick={() => (step = "choose")} class="px-4 h-10 rounded-xl text-sm text-[var(--color-ink-2)] hover:bg-[var(--color-surface-3)] transition-colors">
-        Back
-      </button>
-    {/if}
-    {#if step === "blank"}
-      <button type="button" onclick={createBlank} disabled={busy || !name.trim()} class="px-4 h-10 rounded-xl text-sm font-medium bg-[var(--color-accent)] text-[var(--color-bg)] disabled:opacity-50">Create</button>
-    {:else if step === "google"}
-      <button type="button" onclick={createGoogle} disabled={busy || !gCalId} class="px-4 h-10 rounded-xl text-sm font-medium bg-[var(--color-accent)] text-[var(--color-bg)] disabled:opacity-50 inline-flex items-center gap-1.5">
-        {#if busy}<Loader2 size={14} class="animate-spin" />{/if} Create
-      </button>
-    {:else if step === "notion"}
-      <button type="button" onclick={createNotion} disabled={busy || !nDbId} class="px-4 h-10 rounded-xl text-sm font-medium bg-[var(--color-accent)] text-[var(--color-bg)] disabled:opacity-50 inline-flex items-center gap-1.5">
-        {#if busy}<Loader2 size={14} class="animate-spin" />{/if} Create
-      </button>
-    {/if}
   </div>
 </div>

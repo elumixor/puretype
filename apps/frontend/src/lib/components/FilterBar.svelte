@@ -56,11 +56,13 @@
 {#snippet addButton()}
   <button
     onclick={openCreate}
-    class="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full border border-dashed shrink-0
-      border-[var(--color-border-hover)] text-[12px] font-medium text-[var(--color-ink-3)]
-      hover:text-[var(--color-accent)] hover:border-[var(--color-accent)]/50 transition-colors"
+    class="flex items-center gap-1.5 border border-dashed border-border-hover text-ink-3
+      hover:text-accent hover:border-accent/50 transition-colors
+      {isCol
+      ? 'w-full justify-center h-9 rounded-md text-[13px] font-medium mt-1'
+      : 'shrink-0 pl-2 pr-3 py-1.5 rounded-full text-[12px] font-medium'}"
   >
-    <Plus size={13} />
+    <Plus size={14} />
     New project
   </button>
 {/snippet}
@@ -91,19 +93,19 @@
         tabindex="0"
         oncontextmenu={(e) => onChipContextMenu(e, p)}
         onpointerdown={(e) => onChipPointerDown(e, p)}
-        class="flex items-center rounded-full border transition-colors select-none
-          {isCol ? 'w-full' : 'shrink-0'}
+        class="flex items-center border transition-colors select-none cursor-pointer
+          {isCol ? 'w-full rounded-md' : 'shrink-0 rounded-full'}
           {p.hidden ? 'opacity-50' : ''}
           {muted ? 'opacity-45' : ''}
           {activeFilter
           ? 'bg-[var(--color-accent-dim)] border-[var(--color-accent)]/40'
-          : 'bg-[var(--color-surface)] border-[var(--color-border)]'}"
+          : 'bg-surface border-border hover:bg-surface-3'}"
       >
         <div
-          class="flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 text-[12px] font-medium
+          class="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 text-[13px] font-medium
             {isCol ? 'flex-1 min-w-0' : ''}
             {muted ? 'line-through' : ''}
-            {activeFilter ? 'text-[var(--color-accent)]' : 'text-[var(--color-ink-2)]'}"
+            {activeFilter ? 'text-[var(--color-accent)]' : 'text-ink-2'}"
         >
           <ProjectAvatar project={p} size={18} />
           <span class={isCol ? "truncate" : ""}>{applyCap(p.name, toCapMode(p.capitalization), true)}</span>
