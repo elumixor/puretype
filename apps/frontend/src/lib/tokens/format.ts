@@ -15,6 +15,8 @@ export function fmtTime(d: Date): string {
 
 export function fmtDateTime(d: Date, hasTime: boolean, atSentenceStart = true): string {
   const now = new Date();
+  // Today + a time → just the time (today is the assumed day when none is given).
+  if (hasTime && sameDay(d, now)) return fmtTime(d);
   const tomorrow = new Date(now);
   tomorrow.setDate(now.getDate() + 1);
   let day: string;
