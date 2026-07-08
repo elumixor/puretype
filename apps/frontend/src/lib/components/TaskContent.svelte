@@ -5,7 +5,6 @@
   import { projects } from "$lib/projects.svelte";
   import { fmtDateTime, fmtDuration, fmtLinkLabel, parseSegments, repeatLabel } from "$lib/tokens";
   import { placeUrl } from "$lib/placeSearch";
-  import BrandIcon from "./icons/BrandIcon.svelte";
   import ProjectAvatar from "./ProjectAvatar.svelte";
 
   let { task, dimmed = false }: { task: Task; dimmed?: boolean } = $props();
@@ -23,27 +22,6 @@
   class="flex-1 block text-[15px] font-light tracking-wide leading-[23px] min-h-[23px] cursor-text select-none whitespace-pre-wrap break-words
     {dimmed ? 'line-through text-[var(--color-ink-3)] task-done' : 'text-[var(--color-ink)]'}"
 >
-  {#if task.source === "google" || task.source === "notion"}
-    {@const label = task.source === "notion" ? "From Notion" : "From Google Calendar"}
-    {#if task.externalUrl}
-      <a
-        href={task.externalUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        title={label}
-        aria-label={label}
-        class="inline-flex items-center align-[-2px] mr-1 opacity-90 hover:opacity-100"
-        onclick={(e) => e.stopPropagation()}
-        onpointerdown={(e) => e.stopPropagation()}
-      >
-        <BrandIcon brand={task.source} size={13} />
-      </a>
-    {:else}
-      <span class="inline-flex items-center align-[-2px] mr-1 opacity-90" title={label}>
-        <BrandIcon brand={task.source} size={13} />
-      </span>
-    {/if}
-  {/if}
   {#each segments as seg, i (i)}
     {#if seg.kind === "text"}{seg.value}{:else if seg.kind === "project"}
       <button

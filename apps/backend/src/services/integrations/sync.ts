@@ -73,7 +73,9 @@ export async function syncCalendarSource(source: CalendarSource & { account: Goo
       : timed
         ? startRaw.slice(0, 16) // "YYYY-MM-DDTHH:MM"
         : startRaw; // all-day: "YYYY-MM-DD"
-    const text = `${summary} @time:${timeTok}${repeatCode ? ` @repeat:${repeatCode}` : ""}`;
+    const text =
+      `${summary} @time:${timeTok}${repeatCode ? ` @repeat:${repeatCode}` : ""}` +
+      ` @project:${source.projectId}`;
     const externalUpdatedAt = ev.updated ? new Date(ev.updated) : null;
 
     await prisma.task.upsert({
@@ -123,7 +125,7 @@ export async function syncNotionSource(source: NotionSource & { account: NotionA
     if (page.archived) continue;
     seen.add(page.id);
 
-    const text = notion.readTitle(page);
+    const text = `${notion.readTitle(page)} @project:${source.projectId}`;
     const dateStr = notion.readDate(page, source.datePropertyId);
     const done = notion.readDone(page, source);
     const externalUpdatedAt = new Date(page.last_edited_time);
