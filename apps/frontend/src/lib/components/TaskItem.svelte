@@ -65,7 +65,6 @@
   let menuX = $state(0);
   let menuY = $state(0);
   let bulkCtx = $state(false);
-  let taskRect = $state<{ left: number; top: number; width: number; height: number } | null>(null);
   let confirmDelete = $state(false);
   let confirmBulk = $state(false);
 
@@ -99,10 +98,6 @@
   function openMenu(x: number, y: number) {
     menuX = x;
     menuY = y;
-    if (el) {
-      const r = el.getBoundingClientRect();
-      taskRect = { left: r.left, top: r.top, width: r.width, height: r.height };
-    }
     menuOpen = true;
     tapMedium();
   }
@@ -164,8 +159,7 @@
   data-dnd-item={task.id}
   class="group relative rounded-2xl transition-[outline-color] duration-500
     {isSelected || flash ? 'outline outline-2 outline-[var(--color-accent)]' : 'outline outline-2 outline-transparent'}
-    {!mounted ? 'animate-fade-up' : ''}
-    {menuOpen ? 'invisible' : ''}"
+    {!mounted ? 'animate-fade-up' : ''}"
   style="animation-delay: {index * 50}ms"
   oncontextmenu={handleContextMenu}
   role="listitem"
@@ -212,12 +206,9 @@
 
 {#if menuOpen}
   <TaskActionMenu
-    {task}
     x={menuX}
     y={menuY}
     bulk={bulkCtx}
-    rect={taskRect}
-    {isSelected}
     onClose={() => (menuOpen = false)}
     onEdit={startEdit}
     onDuplicate={() => onDuplicate(task)}
