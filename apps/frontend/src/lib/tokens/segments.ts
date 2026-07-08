@@ -7,7 +7,8 @@ export type Segment =
   | { kind: "time"; date: Date; hasTime: boolean }
   | { kind: "dur"; minutes: number }
   | { kind: "place"; name: string; lat: number; lng: number }
-  | { kind: "link"; url: string };
+  | { kind: "link"; url: string }
+  | { kind: "repeat"; code: string };
 
 export function parseSegments(text: string, projects: Project[]): Segment[] {
   const segs: Segment[] = [];
@@ -22,6 +23,8 @@ export function parseSegments(text: string, projects: Project[]): Segment[] {
       segs.push({ kind: "project", id: value, project: projects.find((p) => p.id === value) });
     } else if (type === "dur") {
       segs.push({ kind: "dur", minutes: Number(value) });
+    } else if (type === "repeat") {
+      segs.push({ kind: "repeat", code: value });
     } else if (type === "link") {
       try {
         segs.push({ kind: "link", url: decodeURIComponent(value) });

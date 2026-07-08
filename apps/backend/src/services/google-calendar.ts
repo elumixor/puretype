@@ -124,11 +124,14 @@ export interface CalendarEvent {
   updated?: string;
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
+  recurrence?: string[]; // RRULE/EXDATE lines on a recurring master
+  recurringEventId?: string; // set on a modified single instance (override)
 }
 
-// Windowed pull: events from `daysBack` ago to `daysAhead` out, expanded to
-// single instances. Simpler and more robust than incremental syncToken; the
-// caller reconciles deletions against the returned set.
+// Windowed pull. `singleEvents: false` so a recurring series comes back as ONE
+// master (carrying its RRULE) instead of a flood of expanded instances — the
+// sync then creates a single repeating task. Non-recurring events are single
+// items as before. The caller reconciles deletions against the returned set.
 export async function listEvents(
   account: GoogleAccount,
   calendarId: string,
@@ -136,7 +139,11 @@ export async function listEvents(
 ): Promise<CalendarEvent[]> {
   const token = await getValidAccessToken(account);
   const now = Date.now();
-  const timeMin = new Date(now - daysBack * 86_400_000).toISOString();
+  // With singleEvents=false, timeMin/Max filter against each event's own start,
+  // so a recurring master whose DTSTART is in the past would be dropped. Widen
+  // the lower bound generously so long-running series are still returned; the
+  // sync computes each series' next upcoming occurrence itself.
+  const timeMin = new Date(now - 3650 * 86_400_000).toISOString();
   const timeMax = new Date(now + daysAhead * 86_400_000).toISOString();
 
   const out: CalendarEvent[] = [];
@@ -145,8 +152,7 @@ export async function listEvents(
     const params = new URLSearchParams({
       timeMin,
       timeMax,
-      singleEvents: "true",
-      orderBy: "startTime",
+      singleEvents: "false",
       maxResults: "250",
       showDeleted: "false",
     });

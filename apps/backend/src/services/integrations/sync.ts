@@ -2,6 +2,7 @@ import { bucketForDate } from "services/buckets";
 import * as google from "services/google-calendar";
 import * as notion from "services/notion";
 import { prisma } from "services/prisma";
+import { parseRecurrence } from "services/recurrence";
 import type { CalendarSource, GoogleAccount, NotionAccount, NotionSource } from "generated:prisma";
 
 // Pull external items into tasks. Runs server-side; the offline client picks up
@@ -25,19 +26,43 @@ export async function syncCalendarSource(source: CalendarSource & { account: Goo
   const daysBack = 1;
   const daysAhead = 45;
   const windowStart = new Date(Date.now() - daysBack * 86_400_000);
+  const windowEnd = new Date(Date.now() + daysAhead * 86_400_000);
   const events = await google.listEvents(source.account, source.calendarId, { daysBack, daysAhead });
 
   const seen = new Set<string>();
   for (const ev of events) {
     if (ev.status === "cancelled") continue;
+    // Modified single instances of a series carry recurringEventId; the series
+    // is represented by its master, so skip these to keep one task per series.
+    if (ev.recurringEventId) continue;
     const startRaw = ev.start?.dateTime ?? ev.start?.date;
     if (!startRaw) continue;
+    const timed = Boolean(ev.start?.dateTime);
+
+    // A recurring master → one repeating task dated at its next occurrence.
+    // A one-off → keep only if it falls inside the normal window (the fetch
+    // window is widened to catch old recurring masters, not old one-offs).
+    let scheduledAt: Date;
+    let startTime: Date | null;
+    let repeatCode: string | null = null;
+    if (ev.recurrence?.length) {
+      const rec = parseRecurrence(ev.recurrence, new Date(startRaw));
+      if (!rec) continue;
+      repeatCode = rec.code;
+      scheduledAt = rec.next;
+      startTime = timed ? rec.next : null;
+    } else {
+      const d = new Date(startRaw);
+      if (d < windowStart || d > windowEnd) continue;
+      ({ scheduledAt, startTime } = parseDate(startRaw));
+    }
     seen.add(ev.id);
 
-    const { scheduledAt, startTime } = parseDate(startRaw);
     const endRaw = ev.end?.dateTime;
-    const duration = startTime && endRaw ? Math.round((new Date(endRaw).getTime() - startTime.getTime()) / 60000) : null;
-    const text = (ev.summary ?? "").trim() || "(untitled event)";
+    const startRawMs = new Date(startRaw).getTime();
+    const duration = timed && endRaw ? Math.round((new Date(endRaw).getTime() - startRawMs) / 60000) : null;
+    const summary = (ev.summary ?? "").trim() || "(untitled event)";
+    const text = repeatCode ? `${summary} @repeat:${repeatCode}` : summary;
     const externalUpdatedAt = ev.updated ? new Date(ev.updated) : null;
 
     await prisma.task.upsert({

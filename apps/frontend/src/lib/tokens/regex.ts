@@ -4,11 +4,14 @@
 //   @dur:<minutes>                       → duration pill
 //   @place:<urlEncodedName>|<lat>,<lng>  → Google Maps place pill
 //   @link:<urlEncodedUrl>                → external URL pill
+//   @repeat:<code>                       → recurrence pill (small icon)
+//       code = <interval><unit>[:detail]; unit d|w|m|y; w detail=BYDAY (MO,TH),
+//       m detail=day-of-month. e.g. 1d, 2w:MO,TH, 1m:15, 1y
 //
 // Date-only @time tokens are no longer used for bucketing — the bucket is
 // stored on the task. @time:YYYY-MM-DDTHH:MM survives because users still
 // add reminders / start times; the date portion is informational.
-export const TOKEN_RE = /@(project|time|dur|place|link):([^\s@]+)/g;
+export const TOKEN_RE = /@(project|time|dur|place|link|repeat):([^\s@]+)/g;
 
 export const pad = (n: number) => String(n).padStart(2, "0");
 

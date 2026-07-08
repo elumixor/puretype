@@ -24,6 +24,37 @@ export function fmtDateTime(d: Date, hasTime: boolean, atSentenceStart = true): 
   return hasTime ? `${day}, ${fmtTime(d)}` : day;
 }
 
+const DAY_LABEL: Record<string, string> = {
+  MO: "Mon",
+  TU: "Tue",
+  WE: "Wed",
+  TH: "Thu",
+  FR: "Fri",
+  SA: "Sat",
+  SU: "Sun",
+};
+
+// Human description of a compact recurrence code (see tokens/regex). Used as the
+// tooltip on the repeat pill, which itself only shows an icon.
+export function repeatLabel(code: string): string {
+  const m = code.match(/^(\d+)([dwmy])(?::(.+))?$/);
+  if (!m) return "Repeats";
+  const n = Number(m[1]);
+  const unit = m[2];
+  const detail = m[3];
+  if (unit === "d") return n > 1 ? `Every ${n} days` : "Every day";
+  if (unit === "y") return n > 1 ? `Every ${n} years` : "Every year";
+  if (unit === "m") return detail ? `Monthly on day ${detail}` : n > 1 ? `Every ${n} months` : "Every month";
+  const days = detail
+    ? detail
+        .split(",")
+        .map((d) => DAY_LABEL[d] ?? d)
+        .join(", ")
+    : "";
+  const base = n > 1 ? `Every ${n} weeks` : "Weekly";
+  return days ? `${base} on ${days}` : base;
+}
+
 export function fmtDuration(min: number): string {
   if (min < 60) return `${min}m`;
   const h = Math.floor(min / 60);

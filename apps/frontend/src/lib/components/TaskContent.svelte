@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Clock, Hourglass, Link2, MapPin } from "lucide-svelte";
+  import { Clock, Hourglass, Link2, MapPin, Repeat } from "lucide-svelte";
   import type { Task } from "$lib/api";
   import { applyCap, sentenceStartFlags, toCapMode } from "$lib/capitalize";
   import { projects } from "$lib/projects.svelte";
-  import { fmtDateTime, fmtDuration, fmtLinkLabel, parseSegments } from "$lib/tokens";
+  import { fmtDateTime, fmtDuration, fmtLinkLabel, parseSegments, repeatLabel } from "$lib/tokens";
   import { placeUrl } from "$lib/placeSearch";
   import BrandIcon from "./icons/BrandIcon.svelte";
   import ProjectAvatar from "./ProjectAvatar.svelte";
@@ -68,6 +68,10 @@
       <span class="pill pill-dur">
         <Hourglass size={12} strokeWidth={2.5} />
         {fmtDuration(seg.minutes)}
+      </span>
+    {:else if seg.kind === "repeat"}
+      <span class="pill pill-time" title={repeatLabel(seg.code)} aria-label={repeatLabel(seg.code)}>
+        <Repeat size={12} strokeWidth={2.5} />
       </span>
     {:else if seg.kind === "place"}
       <a
