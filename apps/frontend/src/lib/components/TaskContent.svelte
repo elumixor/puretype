@@ -3,7 +3,7 @@
   import type { Task } from "$lib/api";
   import { applyCap, sentenceStartFlags, toCapMode } from "$lib/capitalize";
   import { projects } from "$lib/projects.svelte";
-  import { fmtDateTime, fmtDuration, fmtLinkLabel, parseSegments, repeatLabel } from "$lib/tokens";
+  import { fmtDateTime, fmtDuration, fmtLinkLabel, parseSegments, projectIds, repeatLabel } from "$lib/tokens";
   import { placeUrl } from "$lib/placeSearch";
   import ProjectAvatar from "./ProjectAvatar.svelte";
 
@@ -11,6 +11,13 @@
 
   const segments = $derived(parseSegments(task.text, projects.list));
   const startFlags = $derived(sentenceStartFlags(segments));
+
+  // Synced tasks carry their project via task.projectId, not always an @project
+  // token (imported before the token existed). Render an implicit pill for it so
+  // the association is visible everywhere.
+  const implicitProject = $derived(
+    task.projectId && !projectIds(task.text).includes(task.projectId) ? projects.byId(task.projectId) : undefined,
+  );
 
   function filterByProject(e: MouseEvent, id: string) {
     e.stopPropagation();
@@ -78,4 +85,15 @@
       </a>
     {/if}
   {/each}
+  {#if implicitProject}
+    {" "}<button
+      type="button"
+      class="pill pill-project"
+      onclick={(e) => filterByProject(e, implicitProject.id)}
+      onpointerdown={(e) => e.stopPropagation()}
+    >
+      <ProjectAvatar project={implicitProject} size={15} />
+      {applyCap(implicitProject.name, toCapMode(implicitProject.capitalization), false)}
+    </button>
+  {/if}
 </span>

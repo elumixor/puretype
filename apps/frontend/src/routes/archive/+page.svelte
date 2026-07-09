@@ -2,7 +2,7 @@
   import { ChevronLeft } from "lucide-svelte";
   import { tasks as tasksStore } from "$lib/tasks.svelte";
   import { projects } from "$lib/projects.svelte";
-  import { extractFields, projectIds } from "$lib/tokens";
+  import { extractFields, taskProjectIds } from "$lib/tokens";
   import { isArchived } from "$lib/archive.svelte";
   import { toasts } from "$lib/toast.svelte";
   import type { Task } from "$lib/api";
@@ -20,7 +20,7 @@
       if (!isArchived(t)) return false;
       if (!projects.filterId) return true;
       const wanted = projects.descendantIds(projects.filterId);
-      return projectIds(t.text).some((id) => wanted.has(id));
+      return taskProjectIds(t).some((id) => wanted.has(id));
     }),
   );
 

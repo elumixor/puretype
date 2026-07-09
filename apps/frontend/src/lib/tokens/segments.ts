@@ -77,4 +77,14 @@ export function projectIds(text: string): string[] {
   return ids;
 }
 
+// A task's project association is canonically `task.projectId` (set directly for
+// synced tasks) plus any @project tokens in its text (how manual tasks carry it).
+// Synced tasks imported before the token was added have only the former, so both
+// must be considered for display, filtering and muting.
+export function taskProjectIds(task: { text: string; projectId?: string | null }): string[] {
+  const ids = projectIds(task.text);
+  if (task.projectId && !ids.includes(task.projectId)) ids.push(task.projectId);
+  return ids;
+}
+
 export const stripTokens = (text: string): string => text.replace(TOKEN_RE, "").replace(/\s+/g, " ").trim();

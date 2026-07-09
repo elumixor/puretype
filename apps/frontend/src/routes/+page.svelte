@@ -33,7 +33,7 @@
   import { sync } from "$lib/sync.svelte";
   import { ls } from "$lib/storage";
   import { tasks as tasksStore } from "$lib/tasks.svelte";
-  import { displayBucket, projectIds } from "$lib/tokens";
+  import { displayBucket, taskProjectIds } from "$lib/tokens";
   import { voiceTurn } from "$lib/voice-turn.svelte";
 
   const tasks = $derived(tasksStore.list);
@@ -46,7 +46,7 @@
   let resumeSource = $state<"google" | "notion" | null>(null);
 
   const matchesFilter = (t: Task) => {
-    const pids = projectIds(t.text);
+    const pids = taskProjectIds(t);
     // Tapping a chip mutes a project → hide its tasks.
     if (pids.some((id) => projects.isMuted(id))) return false;
     if (!projects.filterId) return true;
