@@ -1,7 +1,9 @@
 import type { Project } from "$lib/api";
 import { applyCap, sentenceStartFlags, toCapMode } from "$lib/capitalize";
 import { marbleSvg } from "$lib/marble";
+import { projects } from "$lib/projects.svelte";
 import { fmtDateTime, fmtDuration, fmtLinkLabel, parseSegments, repeatLabel, type Segment } from "$lib/tokens";
+import { BRAND_ICONS } from "./components/icons/brand-data";
 
 const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
@@ -27,6 +29,11 @@ export function avatarHtml(project: Project | undefined, name: string, size = 15
     return `<img src="${esc(project.image)}" width="${size}" height="${size}" style="width:${size}px;height:${size}px;border-radius:9999px;object-fit:cover" alt="">`;
   if (project?.avatarType === "emoji" && project.emoji)
     return `<span class="pill-emoji" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.62)}px">${esc(project.emoji)}</span>`;
+  const provider = project ? projects.providerOf(project.id) : undefined;
+  if (provider) {
+    const inner = Math.round(size * 0.64);
+    return `<span style="width:${size}px;height:${size}px;display:inline-flex;align-items:center;justify-content:center;background:#fff;border-radius:9999px"><img src="${BRAND_ICONS[provider]}" width="${inner}" height="${inner}" alt="" style="border-radius:2px"></span>`;
+  }
   return marbleSvg(project?.name ?? name, size, project?.hue);
 }
 

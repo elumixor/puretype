@@ -61,10 +61,10 @@
 
   async function load() {
     overview = await api.integrations.$get();
-    const ids = new Set<string>();
-    for (const a of overview.google.accounts) for (const s of a.calendarSources) ids.add(s.projectId);
-    for (const a of overview.notion.accounts) for (const s of a.notionSources) ids.add(s.projectId);
-    projects.setLinked(ids);
+    const entries: [string, "google" | "notion"][] = [];
+    for (const a of overview.google.accounts) for (const s of a.calendarSources) entries.push([s.projectId, "google"]);
+    for (const a of overview.notion.accounts) for (const s of a.notionSources) entries.push([s.projectId, "notion"]);
+    projects.setLinked(entries);
   }
   onMount(load);
 

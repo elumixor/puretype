@@ -25,29 +25,34 @@ class ProjectsStore {
   private previousFilterId: string | null = null;
   private booted = false;
 
-  // Projects bound to an external source (Google/Notion). Source-linked
-  // projects aren't nestable. Populated from the integrations overview.
-  linkedIds = $state<Set<string>>(new Set());
+  // Projects bound to an external source, mapped to their provider. Source-linked
+  // projects aren't nestable and show the provider's icon. Populated from the
+  // integrations overview.
+  linked = $state<Map<string, "google" | "notion">>(new Map());
 
   isMuted(id: string): boolean {
     return this.mutedIds.has(id);
   }
 
   isLinked(id: string): boolean {
-    return this.linkedIds.has(id);
+    return this.linked.has(id);
   }
 
-  setLinked(ids: Iterable<string>) {
-    this.linkedIds = new Set(ids);
+  providerOf(id: string): "google" | "notion" | undefined {
+    return this.linked.get(id);
+  }
+
+  setLinked(entries: Iterable<[string, "google" | "notion"]>) {
+    this.linked = new Map(entries);
   }
 
   async refreshLinks() {
     try {
       const ov = await api.integrations.$get();
-      const ids = new Set<string>();
-      for (const a of ov.google.accounts) for (const s of a.calendarSources) ids.add(s.projectId);
-      for (const a of ov.notion.accounts) for (const s of a.notionSources) ids.add(s.projectId);
-      this.linkedIds = ids;
+      const entries: [string, "google" | "notion"][] = [];
+      for (const a of ov.google.accounts) for (const s of a.calendarSources) entries.push([s.projectId, "google"]);
+      for (const a of ov.notion.accounts) for (const s of a.notionSources) entries.push([s.projectId, "notion"]);
+      this.linked = new Map(entries);
     } catch {
       // offline / auth not ready — keep whatever we had
     }
