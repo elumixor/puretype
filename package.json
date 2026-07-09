@@ -6,7 +6,8 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "mprocs",
+    "dev": "devkit dev",
+    "dev:open": "devkit dev --open",
     "ios": "bun --filter frontend ios",
     "ios:prod": "bun --filter frontend ios:prod",
     "lint": "biome lint .",
@@ -14,11 +15,17 @@
     "check": "biome check .",
     "release": "release-ios"
   },
+  "devkit": {
+    "apps": [
+      { "name": "backend", "cwd": "apps/backend", "port": 10000, "color": "blue" },
+      { "name": "frontend", "cwd": "apps/frontend", "port": 3000, "color": "magenta", "open": true }
+    ]
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
+    "@elumixor/devkit": "github:elumixor/devkit#v0.1.1",
     "@elumixor/release-ios": "^0.1.2",
     "@libsql/client": "^0.17.2",
-    "mprocs": "^0.9.6",
     "typescript": "^5.8.3"
   }
 }

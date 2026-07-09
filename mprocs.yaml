@@ -1,7 +1,0 @@
-procs:
-  backend:
-    cwd: apps/backend
-    shell: bun run dev
-  frontend:
-    cwd: apps/frontend
-    shell: bun run dev
