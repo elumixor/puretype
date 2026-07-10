@@ -1,5 +1,19 @@
 <script lang="ts">
-  import { Calendar, ChevronRight, FileText, FolderPlus, Loader2 } from "lucide-svelte";
+  import {
+    ArrowLeft,
+    AtSign,
+    Building2,
+    Calendar,
+    Check,
+    ChevronRight,
+    CircleCheck,
+    Database,
+    FileText,
+    FolderPlus,
+    ListFilter,
+    Loader2,
+    Type,
+  } from "lucide-svelte";
   import { onMount, tick } from "svelte";
   import { api } from "$lib/api/client";
   import { portal } from "$lib/portal";
@@ -206,6 +220,13 @@
       ]);
       properties = props.properties;
       nViews = views.views;
+      // Pre-fill sensible defaults: first date property, first done-like
+      // property, and (for status/select) its first option as "done".
+      const firstDate = properties.find((p) => p.type === "date");
+      const firstStatus = properties.find((p) => ["checkbox", "status", "select"].includes(p.type));
+      nDate = firstDate?.id ?? "";
+      nStatus = firstStatus?.id ?? "";
+      nDone = firstStatus && firstStatus.type !== "checkbox" ? (firstStatus.options?.[0] ?? "") : "";
     } catch (e) {
       error = e instanceof Error ? e.message : "Couldn't load properties";
     }
@@ -251,7 +272,6 @@
 
   const inputCls =
     "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors";
-  const labelCls = "block text-[11px] font-medium uppercase tracking-wider text-ink-3 mb-1.5";
 </script>
 
 <div use:portal>
@@ -260,10 +280,17 @@
   <div
     role="dialog"
     aria-label="New project"
-    class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[91] w-[min(92vw,400px)]
+    class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[91] w-[min(92vw,400px)] wide:w-[min(92vw,480px)]
       rounded-xl border border-border bg-surface-2 p-5 shadow-2xl shadow-black/50 animate-scale-in
       max-h-[85vh] overflow-y-auto"
   >
+    {#snippet fieldLabel(Icon: typeof Type, text: string)}
+      <span class="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-3 mb-1.5">
+        <Icon size={12} class="text-ink-3 shrink-0" />
+        {text}
+      </span>
+    {/snippet}
+
     <div class="mb-4">
       <h2 class="text-[15px] font-semibold tracking-tight text-ink">New project</h2>
       <p class="text-xs text-ink-3 mt-0.5">
@@ -314,15 +341,15 @@
     {:else if step === "google"}
       <div class="space-y-3">
         <div>
-          <span class={labelCls}>Account</span>
+          {@render fieldLabel(AtSign, "Account")}
           <Select bind:value={gAccountId} options={gAccountOptions} onChange={loadCalendars} onAction={() => connect("google")} />
         </div>
         <div>
-          <span class={labelCls}>Calendar</span>
+          {@render fieldLabel(Calendar, "Calendar")}
           <Select value={gCalId} options={calOptions} placeholder={loadingList ? "Loading…" : "Choose…"} onChange={onPickCal} />
         </div>
         <div>
-          <span class={labelCls}>Project name</span>
+          {@render fieldLabel(Type, "Project name")}
           <input bind:value={name} placeholder="Project name" class={inputCls} />
         </div>
       </div>
@@ -330,33 +357,33 @@
     {:else if step === "notion"}
       <div class="space-y-3">
         <div>
-          <span class={labelCls}>Workspace</span>
+          {@render fieldLabel(Building2, "Workspace")}
           <Select bind:value={nAccountId} options={nAccountOptions} onChange={loadDatabases} onAction={() => connect("notion")} />
         </div>
         <div>
-          <span class={labelCls}>Database</span>
+          {@render fieldLabel(Database, "Database")}
           <Select value={nDbId} options={dbOptions} placeholder={loadingList ? "Loading…" : "Choose a database…"} onChange={onPickDb} />
         </div>
         {#if nDbId}
           <div>
-            <span class={labelCls}>Project name</span>
+            {@render fieldLabel(Type, "Project name")}
             <input bind:value={name} placeholder="Project name" class={inputCls} />
           </div>
           <div>
-            <span class={labelCls}>Sync from view</span>
+            {@render fieldLabel(ListFilter, "Sync from view")}
             <Select bind:value={nView} options={viewOptions} />
           </div>
           <div>
-            <span class={labelCls}>Date property</span>
+            {@render fieldLabel(Calendar, "Date property")}
             <Select bind:value={nDate} options={dateOptions} />
           </div>
           <div>
-            <span class={labelCls}>Done property</span>
+            {@render fieldLabel(CircleCheck, "Done property")}
             <Select bind:value={nStatus} options={statusOptions} onChange={() => (nDone = "")} />
           </div>
           {#if doneOptions.length}
             <div>
-              <span class={labelCls}>"Done" means</span>
+              {@render fieldLabel(Check, "\"Done\" means")}
               <Select bind:value={nDone} options={doneValueOptions} />
             </div>
           {/if}
@@ -369,22 +396,24 @@
     <div class="flex justify-end gap-2 mt-5">
       {#if step !== "choose"}
         <button type="button" onclick={() => (step = "choose")}
-          class="inline-flex items-center justify-center h-9 px-4 rounded-md text-sm font-medium text-ink-2 hover:bg-surface-3 transition-colors">
-          Back
+          class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium text-ink-2 hover:bg-surface-3 transition-colors">
+          <ArrowLeft size={15} /> Back
         </button>
       {/if}
       {#if step === "blank"}
         <button type="button" onclick={createBlank} disabled={busy || !name.trim()}
-          class="inline-flex items-center justify-center h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">Create</button>
+          class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">
+          <Check size={15} /> Create
+        </button>
       {:else if step === "google"}
         <button type="button" onclick={createGoogle} disabled={busy || !gCalId || !name.trim()}
           class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">
-          {#if busy}<Loader2 size={14} class="animate-spin" />{/if} Create
+          {#if busy}<Loader2 size={14} class="animate-spin" />{:else}<Check size={15} />{/if} Create
         </button>
       {:else if step === "notion"}
         <button type="button" onclick={createNotion} disabled={busy || !nDbId || !name.trim()}
           class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">
-          {#if busy}<Loader2 size={14} class="animate-spin" />{/if} Create
+          {#if busy}<Loader2 size={14} class="animate-spin" />{:else}<Check size={15} />{/if} Create
         </button>
       {/if}
     </div>

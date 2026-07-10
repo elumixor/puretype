@@ -20,6 +20,7 @@ type Listener = (p: Pulled) => void;
 
 const listeners = new Set<Listener>();
 let running = false;
+let inflight: Promise<void> | null = null;
 let scheduleHandle: ReturnType<typeof setTimeout> | null = null;
 let status = $state<"idle" | "syncing" | "offline" | "error">("idle");
 
@@ -40,31 +41,40 @@ export const sync = {
       void runOnce();
     }, delayMs);
   },
+  // Guarantees a full drain has completed by the time it resolves. If a sync is
+  // already in flight, wait for it to finish, then run a fresh one — the running
+  // sync may have started before our newest op was enqueued, so its drain
+  // wouldn't include it. Callers that create-then-bind depend on this.
   async runNow() {
+    if (inflight) await inflight.catch(() => {});
     await runOnce();
   },
 };
 
-async function runOnce() {
-  if (!browser) return;
-  if (running) return;
+function runOnce(): Promise<void> {
+  if (!browser) return Promise.resolve();
+  if (running) return inflight ?? Promise.resolve();
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     status = "offline";
-    return;
+    return Promise.resolve();
   }
   running = true;
   status = "syncing";
-  try {
-    await authReady;
-    await drainOutbox();
-    await pullDeltas();
-    status = "idle";
-  } catch (err) {
-    console.warn("[sync] failed", err);
-    status = "error";
-  } finally {
-    running = false;
-  }
+  inflight = (async () => {
+    try {
+      await authReady;
+      await drainOutbox();
+      await pullDeltas();
+      status = "idle";
+    } catch (err) {
+      console.warn("[sync] failed", err);
+      status = "error";
+    } finally {
+      running = false;
+      inflight = null;
+    }
+  })();
+  return inflight;
 }
 
 // Push: send all pending ops to the server, one batch. The server returns

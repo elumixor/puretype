@@ -64,7 +64,10 @@ interface RichText {
   plain_text?: string;
 }
 function plain(rt: RichText[] | undefined): string {
-  return (rt ?? []).map((r) => r.plain_text ?? "").join("").trim();
+  return (rt ?? [])
+    .map((r) => r.plain_text ?? "")
+    .join("")
+    .trim();
 }
 
 export interface NotionProperty {
@@ -229,11 +232,7 @@ export async function getViewFilter(token: string, viewId: string): Promise<unkn
   return view?.filter ?? undefined;
 }
 
-export async function queryDatabase(
-  token: string,
-  databaseId: string,
-  filter?: unknown,
-): Promise<NotionPageValue[]> {
+export async function queryDatabase(token: string, databaseId: string, filter?: unknown): Promise<NotionPageValue[]> {
   const out: NotionPageValue[] = [];
   let cursor: string | undefined;
   do {
