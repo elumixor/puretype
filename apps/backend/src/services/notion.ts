@@ -155,25 +155,49 @@ export interface NotionView {
   name: string;
 }
 
-// List a database's views by name. The list endpoint returns only id
-// references, so we fetch each view to get its name (databases have a handful
-// of views, so the fan-out is cheap). Dashboard views have no data source /
-// filterable rows, so they're excluded.
+// List a database's views by name. Views live on the database's data
+// source(s), NOT the database block — listing by database_id returns only a
+// partial subset, so we resolve the data source(s) and list per data source.
+// The list endpoint returns only id references, so we fetch each view to get
+// its name (throttled, since databases can have 20+ views and Notion rate-limits
+// ~3 req/s). Dashboard views have no filterable rows, so they're excluded.
 export async function listViews(token: string, databaseId: string): Promise<NotionView[]> {
-  const ids: string[] = [];
-  let cursor: string | undefined;
-  do {
-    const qs = new URLSearchParams({ database_id: databaseId, page_size: "100" });
-    if (cursor) qs.set("start_cursor", cursor);
-    const res = await fetch(`${API}/views?${qs.toString()}`, { headers: viewsHeaders(token) });
-    if (!res.ok) throw new Error(`notion list views failed: ${res.status}`);
-    const j = (await res.json()) as { results: { id: string }[]; next_cursor: string | null; has_more: boolean };
-    ids.push(...j.results.map((r) => r.id));
-    cursor = j.has_more ? (j.next_cursor ?? undefined) : undefined;
-  } while (cursor);
+  const dbRes = await fetch(`${API}/databases/${databaseId}`, { headers: viewsHeaders(token) });
+  if (!dbRes.ok) throw new Error(`notion get database failed: ${dbRes.status}`);
+  const db = (await dbRes.json()) as { data_sources?: { id: string }[] };
 
-  const views = await Promise.all(ids.map((id) => getView(token, id)));
-  return views.filter((v): v is NonNullable<typeof v> => v !== null && v.type !== "dashboard").map((v) => ({ id: v.id, name: v.name }));
+  const ids: string[] = [];
+  for (const ds of db.data_sources ?? []) {
+    let cursor: string | undefined;
+    do {
+      const qs = new URLSearchParams({ data_source_id: ds.id, page_size: "100" });
+      if (cursor) qs.set("start_cursor", cursor);
+      const res = await fetch(`${API}/views?${qs.toString()}`, { headers: viewsHeaders(token) });
+      if (!res.ok) throw new Error(`notion list views failed: ${res.status}`);
+      const j = (await res.json()) as { results: { id: string }[]; next_cursor: string | null; has_more: boolean };
+      ids.push(...j.results.map((r) => r.id));
+      cursor = j.has_more ? (j.next_cursor ?? undefined) : undefined;
+    } while (cursor);
+  }
+
+  const views = await mapLimit(ids, 3, (id) => getView(token, id));
+  return views
+    .filter((v): v is NonNullable<typeof v> => v !== null && v.type !== "dashboard")
+    .map((v) => ({ id: v.id, name: v.name }));
+}
+
+// Run `fn` over `items` with at most `limit` in flight, preserving order.
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
 }
 
 interface ViewObject {
@@ -184,9 +208,18 @@ interface ViewObject {
 }
 
 async function getView(token: string, viewId: string): Promise<ViewObject | null> {
-  const res = await fetch(`${API}/views/${viewId}`, { headers: viewsHeaders(token) });
-  if (!res.ok) return null;
-  return (await res.json()) as ViewObject;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch(`${API}/views/${viewId}`, { headers: viewsHeaders(token) });
+    if (res.ok) return (await res.json()) as ViewObject;
+    // Back off once on rate limit so a burst doesn't silently drop views.
+    if (res.status === 429) {
+      const retryAfter = Number(res.headers.get("Retry-After") ?? "1");
+      await new Promise((r) => setTimeout(r, Math.min(retryAfter, 5) * 1000));
+      continue;
+    }
+    return null;
+  }
+  return null;
 }
 
 // The saved filter of a view, in the shape queryDatabase accepts, or undefined
