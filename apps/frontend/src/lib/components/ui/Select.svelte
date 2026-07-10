@@ -62,7 +62,7 @@
   <Select.Portal>
     <Select.Content
       sideOffset={4}
-      class="z-[95] w-[var(--bits-floating-anchor-width)] rounded-md border border-border bg-surface-2 p-1
+      class="z-[95] min-w-[var(--bits-floating-anchor-width)] w-max max-w-[20rem] rounded-md border border-border bg-surface-2 p-1
         shadow-2xl shadow-black/50 animate-menu-pop"
     >
       <Select.Viewport class="max-h-60 overflow-y-auto">

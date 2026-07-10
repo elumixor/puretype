@@ -5,7 +5,6 @@
   import { portal } from "$lib/portal";
   import { projects } from "$lib/projects.svelte";
   import { sync } from "$lib/sync.svelte";
-  import NotionFilters, { type Condition } from "./project-editor/NotionFilters.svelte";
   import Select from "./ui/Select.svelte";
 
   // Where the "add project" flow lives: blank, or a project bound to a Google
@@ -36,11 +35,16 @@
   let databases = $state<{ id: string; title: string }[]>([]);
   let nDbId = $state("");
   let properties = $state<{ id: string; name: string; type: string; options?: string[] }[]>([]);
+  let nViews = $state<{ id: string; name: string }[]>([]);
+  let nView = $state("");
   let nDate = $state("");
   let nStatus = $state("");
   let nDone = $state("");
-  let nFilters = $state<Condition[]>([]);
 
+  const viewOptions = $derived([
+    { value: "", label: "All rows" },
+    ...nViews.map((v) => ({ value: v.id, label: v.name })),
+  ]);
   const dateProps = $derived(properties.filter((p) => p.type === "date"));
   const statusProps = $derived(properties.filter((p) => ["checkbox", "status", "select"].includes(p.type)));
   const doneOptions = $derived(properties.find((p) => p.id === nStatus)?.options ?? []);
@@ -190,13 +194,18 @@
   async function onPickDb(databaseId: string) {
     nDbId = databaseId;
     properties = [];
+    nViews = [];
+    nView = "";
     nDate = nStatus = nDone = "";
-    nFilters = [];
     name = databases.find((d) => d.id === databaseId)?.title ?? name;
     if (!databaseId) return;
     try {
-      const r = await api.integrations.notion.properties.$post({ accountId: nAccountId, databaseId });
-      properties = r.properties;
+      const [props, views] = await Promise.all([
+        api.integrations.notion.properties.$post({ accountId: nAccountId, databaseId }),
+        api.integrations.notion.views.$post({ accountId: nAccountId, databaseId }),
+      ]);
+      properties = props.properties;
+      nViews = views.views;
     } catch (e) {
       error = e instanceof Error ? e.message : "Couldn't load properties";
     }
@@ -212,12 +221,12 @@
           accountId: nAccountId,
           databaseId: db.id,
           databaseName: db.title,
+          viewId: nView || null,
           projectId,
           datePropertyId: nDate || null,
           statusPropertyId: nStatus || null,
           statusPropType,
           doneValue: statusPropType === "checkbox" ? null : nDone || null,
-          filters: nFilters,
         })
         .then(() => {}),
     );
@@ -334,6 +343,10 @@
             <input bind:value={name} placeholder="Project name" class={inputCls} />
           </div>
           <div>
+            <span class={labelCls}>Sync from view</span>
+            <Select bind:value={nView} options={viewOptions} />
+          </div>
+          <div>
             <span class={labelCls}>Date property</span>
             <Select bind:value={nDate} options={dateOptions} />
           </div>
@@ -347,7 +360,6 @@
               <Select bind:value={nDone} options={doneValueOptions} />
             </div>
           {/if}
-          <NotionFilters {properties} bind:conditions={nFilters} />
         {/if}
       </div>
     {/if}

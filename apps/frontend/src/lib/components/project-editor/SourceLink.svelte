@@ -6,7 +6,6 @@
   import { sync } from "$lib/sync.svelte";
   import BrandIcon from "../icons/BrandIcon.svelte";
   import Select from "../ui/Select.svelte";
-  import NotionFilters, { type Condition } from "./NotionFilters.svelte";
 
   // Shows the external source(s) a project is bound to (Google calendar / Notion
   // database) with detach + (Notion) reconfigure of the date/done mapping.
@@ -19,11 +18,16 @@
   // Notion reconfigure state (one source at a time).
   let editing = $state<string | null>(null);
   let dbProps = $state<{ id: string; name: string; type: string; options?: string[] }[]>([]);
+  let dViews = $state<{ id: string; name: string }[]>([]);
+  let dView = $state("");
   let dDate = $state("");
   let dStatus = $state("");
   let dDone = $state("");
-  let dFilters = $state<Condition[]>([]);
 
+  const viewOptions = $derived([
+    { value: "", label: "All rows" },
+    ...dViews.map((v) => ({ value: v.id, label: v.name })),
+  ]);
   const dateProps = $derived(dbProps.filter((p) => p.type === "date"));
   const statusProps = $derived(dbProps.filter((p) => ["checkbox", "status", "select"].includes(p.type)));
   const doneOptions = $derived(dbProps.find((p) => p.id === dStatus)?.options ?? []);
@@ -48,16 +52,6 @@
     ),
   );
   const hasAny = $derived(calSources.length > 0 || notionSources.length > 0);
-
-  function parseFilters(json: string | null | undefined): Condition[] {
-    if (!json) return [];
-    try {
-      const a = JSON.parse(json);
-      return Array.isArray(a) ? (a as Condition[]) : [];
-    } catch {
-      return [];
-    }
-  }
 
   async function load() {
     overview = await api.integrations.$get();
@@ -92,12 +86,17 @@
   async function openReconfigure(s: (typeof notionSources)[number]) {
     editing = s.id;
     dbProps = [];
+    dViews = [];
+    dView = s.viewId ?? "";
     dDate = s.datePropertyId ?? "";
     dStatus = s.statusPropertyId ?? "";
     dDone = s.doneValue ?? "";
-    dFilters = parseFilters(s.filters);
-    const r = await api.integrations.notion.properties.$post({ accountId: s.accountId, databaseId: s.databaseId });
-    dbProps = r.properties;
+    const [props, views] = await Promise.all([
+      api.integrations.notion.properties.$post({ accountId: s.accountId, databaseId: s.databaseId }),
+      api.integrations.notion.views.$post({ accountId: s.accountId, databaseId: s.databaseId }),
+    ]);
+    dbProps = props.properties;
+    dViews = views.views;
   }
 
   async function saveReconfigure(s: (typeof notionSources)[number]) {
@@ -109,12 +108,12 @@
         accountId: s.accountId,
         databaseId: s.databaseId,
         databaseName: s.databaseName,
+        viewId: dView || null,
         projectId,
         datePropertyId: dDate || null,
         statusPropertyId: dStatus || null,
         statusPropType,
         doneValue: statusPropType === "checkbox" ? null : dDone || null,
-        filters: dFilters,
       });
       editing = null;
       await load();
@@ -173,6 +172,10 @@
         {#if editing === s.id}
           <div class="px-3 pb-3 pt-1 space-y-2 border-t border-border">
             <div class="space-y-1">
+              <span class={labelCls}>Sync from view</span>
+              <Select bind:value={dView} options={viewOptions} />
+            </div>
+            <div class="space-y-1">
               <span class={labelCls}>Date property</span>
               <Select bind:value={dDate} options={dateOptions} />
             </div>
@@ -186,7 +189,6 @@
                 <Select bind:value={dDone} options={doneValueOptions} />
               </div>
             {/if}
-            <NotionFilters properties={dbProps} bind:conditions={dFilters} />
             <button
               type="button"
               onclick={() => saveReconfigure(s)}

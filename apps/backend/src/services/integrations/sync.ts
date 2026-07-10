@@ -117,7 +117,9 @@ export async function syncCalendarSource(source: CalendarSource & { account: Goo
 // ---- Notion ----------------------------------------------------------------
 
 export async function syncNotionSource(source: NotionSource & { account: NotionAccount }): Promise<void> {
-  const filter = notion.buildNotionFilter(notion.parseFilters(source.filters));
+  // Mirror the rows of the selected Notion view by applying its saved filter.
+  // No view configured → sync every row.
+  const filter = source.viewId ? await notion.getViewFilter(source.account.accessToken, source.viewId) : undefined;
   const pages = await notion.queryDatabase(source.account.accessToken, source.databaseId, filter);
 
   const seen = new Set<string>();

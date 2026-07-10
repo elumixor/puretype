@@ -14,25 +14,15 @@ export default handler(
       databaseId: z.string(),
       databaseName: z.string(),
       projectId: z.string(),
+      viewId: z.string().nullable().optional(),
       datePropertyId: z.string().nullable().optional(),
       statusPropertyId: z.string().nullable().optional(),
       statusPropType: z.enum(["checkbox", "status", "select"]).nullable().optional(),
       doneValue: z.string().nullable().optional(),
-      filters: z
-        .array(
-          z.object({
-            property: z.string(),
-            type: z.enum(["status", "select", "checkbox"]),
-            operator: z.enum(["is", "is_not"]),
-            value: z.string().nullable(),
-          }),
-        )
-        .optional(),
     },
   },
   async ({ user, body }) => {
     requireAuth(user);
-    const filtersJson = body.filters?.length ? JSON.stringify(body.filters) : null;
     const [account, project] = await Promise.all([
       prisma.notionAccount.findFirst({ where: { id: body.accountId, userId: user.id }, select: { id: true } }),
       prisma.project.findFirst({ where: { id: body.projectId, userId: user.id }, select: { id: true } }),
@@ -47,21 +37,21 @@ export default handler(
         notionAccountId: body.accountId,
         databaseId: body.databaseId,
         databaseName: body.databaseName,
+        viewId: body.viewId ?? null,
         projectId: body.projectId,
         datePropertyId: body.datePropertyId ?? null,
         statusPropertyId: body.statusPropertyId ?? null,
         statusPropType: body.statusPropType ?? null,
         doneValue: body.doneValue ?? null,
-        filters: filtersJson,
       },
       update: {
         databaseName: body.databaseName,
+        viewId: body.viewId ?? null,
         projectId: body.projectId,
         datePropertyId: body.datePropertyId ?? null,
         statusPropertyId: body.statusPropertyId ?? null,
         statusPropType: body.statusPropType ?? null,
         doneValue: body.doneValue ?? null,
-        filters: filtersJson,
       },
       include: { account: true },
     });

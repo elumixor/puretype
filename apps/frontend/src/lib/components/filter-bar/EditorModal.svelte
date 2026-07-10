@@ -16,7 +16,7 @@
     onclick={onClose}
   ></button>
   <div
-    class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[91] w-[min(92vw,380px)]
+    class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[91] w-[min(92vw,380px)] wide:w-[min(92vw,520px)]
       p-5 rounded-xl bg-surface-2 border border-border max-h-[85vh] overflow-y-auto
       shadow-2xl shadow-black/50 animate-scale-in"
   >
