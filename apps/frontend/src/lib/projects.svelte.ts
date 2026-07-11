@@ -1,5 +1,5 @@
-import { api } from "$lib/api/client";
 import type { Project } from "$lib/api";
+import { api } from "$lib/api/client";
 import { newId } from "$lib/db/id";
 import { del, getAll, put, putMany } from "$lib/db/idb";
 import { enqueue } from "$lib/db/outbox";
@@ -149,6 +149,16 @@ class ProjectsStore {
     });
     sync.schedule(0);
     return created;
+  }
+
+  // Guarantee the project exists on the server before we depend on it (e.g.
+  // binding an external source to it). `create()` short-circuits on an existing
+  // local project via byName, so that project may never have been pushed — or a
+  // prior push may have failed. The server op is an idempotent upsert, so we can
+  // safely (re-)enqueue a create and flush. Resolves once the sync has drained.
+  async ensureCreated(project: Project): Promise<void> {
+    await enqueue({ kind: "project.create", id: project.id, name: project.name, order: project.order });
+    await sync.runNow();
   }
 
   async update(id: string, patch: Partial<Project>): Promise<Project | undefined> {

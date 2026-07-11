@@ -51,6 +51,7 @@
   let properties = $state<{ id: string; name: string; type: string; options?: string[] }[]>([]);
   let nViews = $state<{ id: string; name: string }[]>([]);
   let nView = $state("");
+  let nLoadingMeta = $state(false); // properties + views loading for the picked DB
   let nDate = $state("");
   let nStatus = $state("");
   let nDone = $state("");
@@ -100,7 +101,9 @@
     error = null;
     try {
       const project = await projects.create(projectName);
-      await sync.runNow();
+      // Make sure the project is actually on the server (create() may have
+      // reused an unpushed local project) before binding a source to it.
+      await projects.ensureCreated(project);
       try {
         await bind(project.id);
       } catch {
@@ -213,6 +216,7 @@
     nDate = nStatus = nDone = "";
     name = databases.find((d) => d.id === databaseId)?.title ?? name;
     if (!databaseId) return;
+    nLoadingMeta = true;
     try {
       const [props, views] = await Promise.all([
         api.integrations.notion.properties.$post({ accountId: nAccountId, databaseId }),
@@ -226,10 +230,20 @@
       const firstStatus = properties.find((p) => ["checkbox", "status", "select"].includes(p.type));
       nDate = firstDate?.id ?? "";
       nStatus = firstStatus?.id ?? "";
-      nDone = firstStatus && firstStatus.type !== "checkbox" ? (firstStatus.options?.[0] ?? "") : "";
+      nDone = doneFor(firstStatus);
     } catch (e) {
       error = e instanceof Error ? e.message : "Couldn't load properties";
+    } finally {
+      nLoadingMeta = false;
     }
+  }
+  // First option of a status/select property (empty for checkbox/none) — the
+  // sensible default "done" value.
+  function doneFor(prop: { type: string; options?: string[] } | undefined): string {
+    return prop && prop.type !== "checkbox" ? (prop.options?.[0] ?? "") : "";
+  }
+  function onPickStatus(id: string) {
+    nDone = doneFor(properties.find((p) => p.id === id));
   }
   async function createNotion() {
     const db = databases.find((d) => d.id === nDbId);
@@ -289,6 +303,10 @@
         <Icon size={12} class="text-ink-3 shrink-0" />
         {text}
       </span>
+    {/snippet}
+
+    {#snippet skeleton()}
+      <div class="h-9 w-full rounded-md border border-border bg-surface animate-pulse"></div>
     {/snippet}
 
     <div class="mb-4">
@@ -371,17 +389,23 @@
           </div>
           <div>
             {@render fieldLabel(ListFilter, "Sync from view")}
-            <Select bind:value={nView} options={viewOptions} />
+            {#if nLoadingMeta}{@render skeleton()}{:else}
+              <Select bind:value={nView} options={viewOptions} />
+            {/if}
           </div>
           <div>
             {@render fieldLabel(Calendar, "Date property")}
-            <Select bind:value={nDate} options={dateOptions} />
+            {#if nLoadingMeta}{@render skeleton()}{:else}
+              <Select bind:value={nDate} options={dateOptions} />
+            {/if}
           </div>
           <div>
             {@render fieldLabel(CircleCheck, "Done property")}
-            <Select bind:value={nStatus} options={statusOptions} onChange={() => (nDone = "")} />
+            {#if nLoadingMeta}{@render skeleton()}{:else}
+              <Select bind:value={nStatus} options={statusOptions} onChange={onPickStatus} />
+            {/if}
           </div>
-          {#if doneOptions.length}
+          {#if !nLoadingMeta && doneOptions.length}
             <div>
               {@render fieldLabel(Check, "\"Done\" means")}
               <Select bind:value={nDone} options={doneValueOptions} />
