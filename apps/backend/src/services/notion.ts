@@ -308,7 +308,9 @@ export function readTitle(page: NotionPageValue): string {
 
 export function readDate(page: NotionPageValue, datePropertyId: string | null): string | null {
   const p = findByOrName(page.properties, datePropertyId);
-  return p?.date?.start ?? null;
+  // For a date range, the end is the actual due moment, so prefer it; fall back
+  // to start for single-value dates (where end is null).
+  return p?.date?.end ?? p?.date?.start ?? null;
 }
 
 // Whether a page is "done" given the configured status mapping.
