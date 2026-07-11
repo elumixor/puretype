@@ -145,8 +145,18 @@ export async function syncNotionSource(source: NotionSource & { account: NotionA
     });
 
     // Skip re-applying remote state when Notion hasn't changed since we last saw
-    // it — protects a local edit that hasn't yet been written back.
-    if (existing && existing.externalUpdatedAt && existing.externalUpdatedAt >= externalUpdatedAt) continue;
+    // it — protects a local edit that hasn't yet been written back. But Notion's
+    // last_edited_time is only minute-resolution, so an edit made in the same
+    // clock-minute we last synced doesn't advance the marker; without the
+    // content check below, such a change would be lost forever. So only skip
+    // when the marker hasn't advanced AND the derived fields already match.
+    const remoteMatches =
+      existing != null &&
+      existing.text === text &&
+      existing.completed === done &&
+      (existing.scheduledAt?.getTime() ?? null) === (scheduledFields.scheduledAt?.getTime() ?? null) &&
+      (existing.startTime?.getTime() ?? null) === (scheduledFields.startTime?.getTime() ?? null);
+    if (existing?.externalUpdatedAt && existing.externalUpdatedAt >= externalUpdatedAt && remoteMatches) continue;
 
     const completedAt = done ? (existing?.completedAt ?? new Date()) : null;
     await prisma.task.upsert({
