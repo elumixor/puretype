@@ -198,6 +198,32 @@ async function softDeleteMissing(
   if (stale.length) await prisma.task.updateMany({ where: { id: { in: stale } }, data: { deletedAt: new Date() } });
 }
 
+// Detach a source: keep its imported tasks as plain local tasks. Strips the
+// project pill (`@project:<id>` token + projectId) and the external linkage so
+// nothing dangles — otherwise a detached task keeps a token pointing at a
+// project/source that's gone and renders an "unknown" pill.
+export async function detachSourceTasks(externalSourceId: string, projectId: string, userId: string): Promise<void> {
+  const tasks = await prisma.task.findMany({
+    where: { externalSourceId, userId, deletedAt: null },
+    select: { id: true, text: true },
+  });
+  const re = new RegExp(`\\s*@project:${projectId}\\b`, "g");
+  for (const t of tasks) {
+    await prisma.task.update({
+      where: { id: t.id },
+      data: {
+        projectId: null,
+        text: t.text.replace(re, "").replace(/\s+/g, " ").trim(),
+        source: "manual",
+        externalId: null,
+        externalSourceId: null,
+        externalUrl: null,
+        externalUpdatedAt: null,
+      },
+    });
+  }
+}
+
 // ---- orchestration ---------------------------------------------------------
 
 // Sync every source for a user whose lastSyncedAt is stale (or forced). Returns

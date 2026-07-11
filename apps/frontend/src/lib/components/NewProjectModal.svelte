@@ -84,7 +84,15 @@
     ...doneOptions.map((o) => ({ value: o, label: o })),
   ]);
   // A live project already uses this name — block creation (names are unique).
-  const nameTaken = $derived(name.trim().length > 0 && projects.byName(name.trim()) !== undefined);
+  // Exclude the project we just created this session: projects.create() adds it
+  // to the list optimistically, which would otherwise flag its own name.
+  let createdId = $state<string | null>(null);
+  const nameTaken = $derived.by(() => {
+    const n = name.trim();
+    if (!n) return false;
+    const existing = projects.byName(n);
+    return existing !== undefined && existing.id !== createdId;
+  });
 
   onMount(async () => {
     try {
@@ -103,6 +111,7 @@
     error = null;
     try {
       const project = await projects.create(projectName);
+      createdId = project.id;
       // Make sure the project is actually on the server (create() may have
       // reused an unpushed local project) before binding a source to it.
       await projects.ensureCreated(project);
@@ -135,6 +144,7 @@
     busy = true;
     try {
       const p = await projects.create(n);
+      createdId = p.id;
       projects.toggleFilter(p.id);
       onClose();
     } finally {
