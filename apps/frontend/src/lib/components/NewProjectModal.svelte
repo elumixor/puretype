@@ -83,6 +83,8 @@
     { value: "", label: "Choose…" },
     ...doneOptions.map((o) => ({ value: o, label: o })),
   ]);
+  // A live project already uses this name — block creation (names are unique).
+  const nameTaken = $derived(name.trim().length > 0 && projects.byName(name.trim()) !== undefined);
 
   onMount(async () => {
     try {
@@ -350,7 +352,7 @@
         bind:value={name}
         placeholder="Project name"
         onkeydown={(e) => {
-          if (e.key === "Enter") createBlank();
+          if (e.key === "Enter" && !nameTaken) createBlank();
           else if (e.key === "Escape") (step = "choose");
         }}
         class={inputCls}
@@ -380,7 +382,9 @@
         </div>
         <div>
           {@render fieldLabel(Database, "Database")}
-          <Select value={nDbId} options={dbOptions} placeholder={loadingList ? "Loading…" : "Choose a database…"} onChange={onPickDb} />
+          {#if loadingList}{@render skeleton()}{:else}
+            <Select value={nDbId} options={dbOptions} placeholder="Choose a database…" onChange={onPickDb} />
+          {/if}
         </div>
         {#if nDbId}
           <div>
@@ -415,6 +419,9 @@
       </div>
     {/if}
 
+    {#if step !== "choose" && nameTaken}
+      <p class="text-xs text-danger mt-3">A project named “{name.trim()}” already exists.</p>
+    {/if}
     {#if error}<p class="text-xs text-danger mt-3">{error}</p>{/if}
 
     <div class="flex justify-end gap-2 mt-5">
@@ -425,17 +432,17 @@
         </button>
       {/if}
       {#if step === "blank"}
-        <button type="button" onclick={createBlank} disabled={busy || !name.trim()}
+        <button type="button" onclick={createBlank} disabled={busy || !name.trim() || nameTaken}
           class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">
           <Check size={15} /> Create
         </button>
       {:else if step === "google"}
-        <button type="button" onclick={createGoogle} disabled={busy || !gCalId || !name.trim()}
+        <button type="button" onclick={createGoogle} disabled={busy || !gCalId || !name.trim() || nameTaken}
           class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">
           {#if busy}<Loader2 size={14} class="animate-spin" />{:else}<Check size={15} />{/if} Create
         </button>
       {:else if step === "notion"}
-        <button type="button" onclick={createNotion} disabled={busy || !nDbId || !name.trim()}
+        <button type="button" onclick={createNotion} disabled={busy || !nDbId || !name.trim() || nameTaken}
           class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50">
           {#if busy}<Loader2 size={14} class="animate-spin" />{:else}<Check size={15} />{/if} Create
         </button>

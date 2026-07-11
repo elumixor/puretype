@@ -346,3 +346,22 @@ export async function updatePageDone(
   });
   if (!res.ok) throw new Error(`notion page update failed: ${res.status} ${await res.text()}`);
 }
+
+// Write the scheduled date back to Notion. Collapses any range to a single
+// date (we treat the range's end as the due moment; rescheduling sets one
+// concrete due date). Passing null clears the date. Best-effort; caller
+// swallows failures.
+export async function updatePageDate(
+  token: string,
+  pageId: string,
+  datePropertyId: string,
+  value: { date: string; timed: boolean } | null,
+): Promise<void> {
+  const date = value ? { start: value.timed ? new Date(value.date).toISOString() : value.date, end: null } : null;
+  const res = await fetch(`${API}/pages/${pageId}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify({ properties: { [datePropertyId]: { date } } }),
+  });
+  if (!res.ok) throw new Error(`notion page date update failed: ${res.status} ${await res.text()}`);
+}

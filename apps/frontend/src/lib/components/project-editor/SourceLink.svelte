@@ -17,6 +17,7 @@
 
   // Notion reconfigure state (one source at a time).
   let editing = $state<string | null>(null);
+  let metaLoading = $state(false); // properties + views loading for the editing source
   let dbProps = $state<{ id: string; name: string; type: string; options?: string[] }[]>([]);
   let dViews = $state<{ id: string; name: string }[]>([]);
   let dView = $state("");
@@ -91,12 +92,17 @@
     dDate = s.datePropertyId ?? "";
     dStatus = s.statusPropertyId ?? "";
     dDone = s.doneValue ?? "";
-    const [props, views] = await Promise.all([
-      api.integrations.notion.properties.$post({ accountId: s.accountId, databaseId: s.databaseId }),
-      api.integrations.notion.views.$post({ accountId: s.accountId, databaseId: s.databaseId }),
-    ]);
-    dbProps = props.properties;
-    dViews = views.views;
+    metaLoading = true;
+    try {
+      const [props, views] = await Promise.all([
+        api.integrations.notion.properties.$post({ accountId: s.accountId, databaseId: s.databaseId }),
+        api.integrations.notion.views.$post({ accountId: s.accountId, databaseId: s.databaseId }),
+      ]);
+      dbProps = props.properties;
+      dViews = views.views;
+    } finally {
+      metaLoading = false;
+    }
   }
 
   async function saveReconfigure(s: (typeof notionSources)[number]) {
@@ -125,6 +131,10 @@
 
   const labelCls = "block text-[10px] font-medium uppercase tracking-wider text-ink-3";
 </script>
+
+{#snippet skeleton()}
+  <div class="h-9 w-full rounded-md border border-border bg-surface animate-pulse"></div>
+{/snippet}
 
 {#if hasAny}
   <div class="space-y-1.5">
@@ -173,17 +183,23 @@
           <div class="px-3 pb-3 pt-1 space-y-2 border-t border-border">
             <div class="space-y-1">
               <span class={labelCls}>Sync from view</span>
-              <Select bind:value={dView} options={viewOptions} />
+              {#if metaLoading}{@render skeleton()}{:else}
+                <Select bind:value={dView} options={viewOptions} />
+              {/if}
             </div>
             <div class="space-y-1">
               <span class={labelCls}>Date property</span>
-              <Select bind:value={dDate} options={dateOptions} />
+              {#if metaLoading}{@render skeleton()}{:else}
+                <Select bind:value={dDate} options={dateOptions} />
+              {/if}
             </div>
             <div class="space-y-1">
               <span class={labelCls}>Done property</span>
-              <Select bind:value={dStatus} options={statusOptions} onChange={() => (dDone = "")} />
+              {#if metaLoading}{@render skeleton()}{:else}
+                <Select bind:value={dStatus} options={statusOptions} onChange={() => (dDone = "")} />
+              {/if}
             </div>
-            {#if doneOptions.length}
+            {#if !metaLoading && doneOptions.length}
               <div class="space-y-1">
                 <span class={labelCls}>"Done" means</span>
                 <Select bind:value={dDone} options={doneValueOptions} />
@@ -192,7 +208,7 @@
             <button
               type="button"
               onclick={() => saveReconfigure(s)}
-              disabled={busy}
+              disabled={busy || metaLoading}
               class="inline-flex items-center justify-center gap-1.5 h-9 w-full rounded-md text-sm font-medium bg-accent text-bg hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
               {#if busy}<Loader2 size={14} class="animate-spin" />{/if} Save mapping

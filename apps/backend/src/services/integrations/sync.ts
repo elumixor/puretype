@@ -264,3 +264,30 @@ export async function writeBackNotionDone(taskId: string, completed: boolean): P
     console.error("[integrations] notion write-back failed:", err);
   }
 }
+
+// Best-effort write-back of a local reschedule to Notion's date property.
+// Called fire-and-forget from the task sync op; never throws to the caller.
+export async function writeBackNotionDate(taskId: string): Promise<void> {
+  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  if (!task?.externalSourceId || task.source !== "notion" || !task.externalId) return;
+  const source = await prisma.notionSource.findUnique({
+    where: { id: task.externalSourceId },
+    include: { account: true },
+  });
+  if (!source?.datePropertyId) return;
+  try {
+    // startTime present → a timed value (keep wall-clock); otherwise all-day,
+    // written as the date-only string so Notion doesn't invent a time.
+    const value = task.scheduledAt
+      ? task.startTime
+        ? { date: task.startTime.toISOString(), timed: true }
+        : { date: task.scheduledAt.toISOString().slice(0, 10), timed: false }
+      : null;
+    await notion.updatePageDate(source.account.accessToken, task.externalId, source.datePropertyId, value);
+    // Bump our stored marker so the next pull doesn't treat Notion's resulting
+    // last_edited_time bump as a remote change to re-apply.
+    await prisma.task.update({ where: { id: taskId }, data: { externalUpdatedAt: new Date() } });
+  } catch (err) {
+    console.error("[integrations] notion date write-back failed:", err);
+  }
+}
