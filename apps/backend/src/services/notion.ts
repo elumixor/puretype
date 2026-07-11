@@ -225,11 +225,54 @@ async function getView(token: string, viewId: string): Promise<ViewObject | null
   return null;
 }
 
-// The saved filter of a view, in the shape queryDatabase accepts, or undefined
-// (view has no filter, or we couldn't read it — sync all rows in that case).
-export async function getViewFilter(token: string, viewId: string): Promise<unknown | undefined> {
-  const view = await getView(token, viewId);
-  return view?.filter ?? undefined;
+// Fetch the pages a view shows. We can't reconstruct a view's filter for the
+// query API — the view stores formula/rollup conditions in a different shape
+// than the query accepts (e.g. `formula: { equals: true }` vs the required
+// `formula: { checkbox: { equals: true } }`), and `is_empty` is subtype-
+// ambiguous. So we let Notion run the view's filter/sort via the view-query
+// endpoint (which returns page id references) and then fetch each page.
+export async function queryView(token: string, viewId: string): Promise<NotionPageValue[]> {
+  const ids: string[] = [];
+  const first = await fetch(`${API}/views/${viewId}/queries`, {
+    method: "POST",
+    headers: viewsHeaders(token),
+    body: JSON.stringify({ page_size: 100 }),
+  });
+  if (!first.ok) throw new Error(`notion view query failed: ${first.status}`);
+  let j = (await first.json()) as {
+    id: string;
+    results: { id: string }[];
+    next_cursor: string | null;
+    has_more: boolean;
+  };
+  const queryId = j.id;
+  ids.push(...j.results.map((r) => r.id));
+  while (j.has_more && j.next_cursor) {
+    const qs = new URLSearchParams({ page_size: "100", start_cursor: j.next_cursor });
+    const res = await fetch(`${API}/views/${viewId}/queries/${queryId}?${qs.toString()}`, {
+      headers: viewsHeaders(token),
+    });
+    if (!res.ok) throw new Error(`notion view query page failed: ${res.status}`);
+    j = (await res.json()) as typeof j;
+    ids.push(...j.results.map((r) => r.id));
+  }
+
+  const pages = await mapLimit(ids, 4, (id) => getPage(token, id));
+  return pages.filter((p): p is NotionPageValue => p !== null);
+}
+
+async function getPage(token: string, pageId: string): Promise<NotionPageValue | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch(`${API}/pages/${pageId}`, { headers: viewsHeaders(token) });
+    if (res.ok) return (await res.json()) as NotionPageValue;
+    if (res.status === 429) {
+      const retryAfter = Number(res.headers.get("Retry-After") ?? "1");
+      await new Promise((r) => setTimeout(r, Math.min(retryAfter, 5) * 1000));
+      continue;
+    }
+    return null;
+  }
+  return null;
 }
 
 export async function queryDatabase(token: string, databaseId: string, filter?: unknown): Promise<NotionPageValue[]> {
