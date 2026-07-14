@@ -44,7 +44,25 @@ Do not add a `workflow_dispatch` trigger. Releases must go through the `release`
 `TURSO_DATABASE_URL` in `apps/backend/.env` is the prod Turso DB. There is no separate dev DB. The local backend (`bun dev`) reads/writes prod.
 
 - When you see a 500 like `no such column: main.Task.X`, the cause is almost always an unapplied migration in `apps/backend/prisma/migrations/`. Apply pending migrations in timestamp order. Do NOT edit schema or routes to work around the missing column.
-- Never run raw `prisma db push` or `prisma migrate deploy` against this DB without confirmation — they hit prod.
+
+### Apply migrations yourself — don't ask
+
+Write the migration under `prisma/migrations/<timestamp>_<name>/migration.sql` and apply it:
+
+```bash
+cd apps/backend && bun scripts/apply-migration.ts prisma/migrations/<dir>/migration.sql
+```
+
+Do this without asking, even though it hits prod. The SQL is a file you authored and it shows up in the
+diff, so it is reviewable after the fact. `prisma.config.ts` points at a throwaway local `dev.db` — that
+is for *generating* migrations only, never the real target.
+
+**Apply the migration BEFORE pushing.** A push redeploys the backend; if the code selects a column that
+does not exist yet, every request touching it 500s until the migration lands.
+
+Still off-limits (blocked by a hook in `.claude/settings.json`): `prisma db push`, `prisma migrate deploy`,
+`prisma migrate reset`. These infer the change themselves and can drop columns or wipe the DB with no
+reviewed SQL. If you think you need one, stop and ask.
 
 ## New / updated features
 
