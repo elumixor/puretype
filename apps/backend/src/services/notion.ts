@@ -365,3 +365,19 @@ export async function updatePageDate(
   });
   if (!res.ok) throw new Error(`notion page date update failed: ${res.status} ${await res.text()}`);
 }
+
+// Write the page's title (the task name) back to Notion. The title property's
+// key varies per database, so resolve it from the page first. Best-effort;
+// caller swallows failures.
+export async function updatePageTitle(token: string, pageId: string, title: string): Promise<void> {
+  const page = await getPage(token, pageId);
+  if (!page) throw new Error(`notion page fetch failed for title update: ${pageId}`);
+  const titleEntry = Object.entries(page.properties).find(([, v]) => v.type === "title");
+  const key = titleEntry ? titleEntry[1].id : "title";
+  const res = await fetch(`${API}/pages/${pageId}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify({ properties: { [key]: { title: [{ type: "text", text: { content: title } }] } } }),
+  });
+  if (!res.ok) throw new Error(`notion page title update failed: ${res.status} ${await res.text()}`);
+}

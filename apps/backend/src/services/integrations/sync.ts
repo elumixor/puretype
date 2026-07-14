@@ -1,3 +1,4 @@
+import { createError } from "h3";
 import { bucketForDate } from "services/buckets";
 import * as google from "services/google-calendar";
 import * as notion from "services/notion";
@@ -5,12 +6,35 @@ import { prisma } from "services/prisma";
 import { parseRecurrence } from "services/recurrence";
 import type { CalendarSource, GoogleAccount, NotionAccount, NotionSource } from "generated:prisma";
 
-// Pull external items into tasks. Runs server-side; the offline client picks up
-// the resulting task rows on its next sync/pull. Idempotent: tasks are keyed by
-// (externalSourceId, externalId) so re-runs upsert rather than duplicate.
+// External items (Google Calendar events, Notion pages) are NOT persisted as
+// local Task rows. The external system is the source of truth: we fetch its
+// items live, map them to task-shaped objects the client merges into its view,
+// and write edits straight back (see editNotionTask). There is no local copy,
+// so external tasks are online-only.
 
-// Re-sync a source at most this often when triggered on app-open.
-const STALE_MS = 1000 * 60 * 5;
+// Task-shaped projection of an external item. A superset of the persisted Task
+// (adds source/externalId… so the client can route edits back), with dates as
+// ISO strings since it never touches Prisma.
+export interface ExternalTask {
+  id: string; // synthetic: "notion:<pageId>" | "google:<eventId>"
+  userId: string;
+  text: string;
+  completed: boolean;
+  completedAt: string | null;
+  order: number;
+  bucket: "today" | "week" | "later";
+  scheduledAt: string | null;
+  projectId: string | null;
+  startTime: string | null;
+  duration: number | null;
+  source: "google" | "notion";
+  externalId: string;
+  externalSourceId: string;
+  externalUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: null;
+}
 
 function parseDate(value: string): { scheduledAt: Date; startTime: Date | null } {
   // Notion/Calendar all-day values are date-only ("2026-07-08"); timed values
@@ -22,50 +46,54 @@ function parseDate(value: string): { scheduledAt: Date; startTime: Date | null }
 
 // ---- Google Calendar -------------------------------------------------------
 
-export async function syncCalendarSource(source: CalendarSource & { account: GoogleAccount }): Promise<void> {
+// Which occurrence of an event a completion refers to. Must be derived
+// identically on the write path (the client echoes back the task's scheduledAt
+// date), or a tick-off won't match the task it came from.
+export function completionKey(externalId: string, scheduledAt: Date | string): string {
+  const iso = typeof scheduledAt === "string" ? scheduledAt : scheduledAt.toISOString();
+  return `${externalId}:${iso.slice(0, 10)}`;
+}
+
+function mapCalendarEvents(source: CalendarSource, events: google.CalendarEvent[], done: Set<string>): ExternalTask[] {
   const daysBack = 1;
   const daysAhead = 45;
   const windowStart = new Date(Date.now() - daysBack * 86_400_000);
   const windowEnd = new Date(Date.now() + daysAhead * 86_400_000);
-  const events = await google.listEvents(source.account, source.calendarId, { daysBack, daysAhead });
+  const out: ExternalTask[] = [];
 
-  const seen = new Set<string>();
-  for (const ev of events) {
-    if (ev.status === "cancelled") continue;
+  events.forEach((ev, index) => {
+    if (ev.status === "cancelled") return;
     // Modified single instances of a series carry recurringEventId; the series
     // is represented by its master, so skip these to keep one task per series.
-    if (ev.recurringEventId) continue;
+    if (ev.recurringEventId) return;
     const startRaw = ev.start?.dateTime ?? ev.start?.date;
-    if (!startRaw) continue;
+    if (!startRaw) return;
     const timed = Boolean(ev.start?.dateTime);
 
-    // A recurring master → one repeating task dated at its next occurrence.
-    // A one-off → keep only if it falls inside the normal window (the fetch
-    // window is widened to catch old recurring masters, not old one-offs).
     let scheduledAt: Date;
     let startTime: Date | null;
     let repeatCode: string | null = null;
+    let bucket: "today" | "week" | "later";
     if (ev.recurrence?.length) {
       const rec = parseRecurrence(ev.recurrence, new Date(startRaw));
-      if (!rec) continue;
+      if (!rec) return;
+      // A series only materialises when its next occurrence lands in the current
+      // week, and it always files under "week". Without this a yearly birthday
+      // resolves to its next occurrence at any distance and squats in "later"
+      // all year round.
+      if (bucketForDate(rec.next) === "later") return;
       repeatCode = rec.code;
       scheduledAt = rec.next;
       startTime = timed ? rec.next : null;
+      bucket = "week";
     } else {
       const d = new Date(startRaw);
-      if (d < windowStart || d > windowEnd) continue;
+      if (d < windowStart || d > windowEnd) return;
       ({ scheduledAt, startTime } = parseDate(startRaw));
+      bucket = bucketForDate(scheduledAt);
     }
-    seen.add(ev.id);
 
-    const endRaw = ev.end?.dateTime;
-    const startRawMs = new Date(startRaw).getTime();
-    const duration = timed && endRaw ? Math.round((new Date(endRaw).getTime() - startRawMs) / 60000) : null;
     const summary = (ev.summary ?? "").trim() || "(untitled event)";
-
-    // Surface the date/time in the task itself as a "@time:" token (a Clock pill
-    // on the client). One-off events keep their exact wall-clock from Google;
-    // recurring ones use the next occurrence's date + the series' time-of-day.
     const timeTok = repeatCode
       ? timed
         ? `${scheduledAt.toISOString().slice(0, 10)}T${startRaw.slice(11, 16)}`
@@ -74,256 +102,175 @@ export async function syncCalendarSource(source: CalendarSource & { account: Goo
         ? startRaw.slice(0, 16) // "YYYY-MM-DDTHH:MM"
         : startRaw; // all-day: "YYYY-MM-DD"
     const text =
-      `${summary} @time:${timeTok}${repeatCode ? ` @repeat:${repeatCode}` : ""}` +
-      ` @project:${source.projectId}`;
-    const externalUpdatedAt = ev.updated ? new Date(ev.updated) : null;
+      `${summary} @time:${timeTok}${repeatCode ? ` @repeat:${repeatCode}` : ""}` + ` @project:${source.projectId}`;
+    const now = ev.updated ?? new Date().toISOString();
 
-    await prisma.task.upsert({
-      where: { externalSourceId_externalId: { externalSourceId: source.id, externalId: ev.id } },
-      create: {
-        userId: source.userId,
-        text,
-        projectId: source.projectId,
-        source: "google",
-        externalId: ev.id,
-        externalSourceId: source.id,
-        externalUrl: ev.htmlLink ?? null,
-        externalUpdatedAt,
-        bucket: bucketForDate(scheduledAt),
-        scheduledAt,
-        startTime,
-        duration,
-      },
-      update: {
-        text,
-        projectId: source.projectId,
-        externalUrl: ev.htmlLink ?? null,
-        externalUpdatedAt,
-        bucket: bucketForDate(scheduledAt),
-        scheduledAt,
-        startTime,
-        duration,
-        deletedAt: null, // resurrect if it reappears
-      },
+    const completed = done.has(completionKey(ev.id, scheduledAt));
+
+    out.push({
+      id: `google:${ev.id}`,
+      userId: source.userId,
+      text,
+      completed,
+      // Calendar has no "completed at" — we store only set membership, so the
+      // occurrence date is the best stamp available.
+      completedAt: completed ? scheduledAt.toISOString() : null,
+      order: index,
+      bucket,
+      scheduledAt: scheduledAt.toISOString(),
+      projectId: source.projectId,
+      startTime: startTime ? startTime.toISOString() : null,
+      duration: null,
+      source: "google",
+      externalId: ev.id,
+      externalSourceId: source.id,
+      externalUrl: ev.htmlLink ?? null,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
     });
-  }
+  });
+  return out;
+}
 
-  // Reconcile deletions within the fetched window only (past events beyond the
-  // window are left alone, not nuked).
-  await softDeleteMissing(source.id, seen, { userId: source.userId, scheduledAfter: windowStart });
-  await prisma.calendarSource.update({ where: { id: source.id }, data: { lastSyncedAt: new Date() } });
+async function fetchCalendarTasks(
+  source: CalendarSource & { account: GoogleAccount },
+  done: Set<string>,
+): Promise<ExternalTask[]> {
+  const events = await google.listEvents(source.account, source.calendarId, { daysBack: 1, daysAhead: 45 });
+  return mapCalendarEvents(source, events, done);
 }
 
 // ---- Notion ----------------------------------------------------------------
 
-export async function syncNotionSource(source: NotionSource & { account: NotionAccount }): Promise<void> {
+function mapNotionPages(source: NotionSource, pages: notion.NotionPageValue[]): ExternalTask[] {
+  const out: ExternalTask[] = [];
+  pages.forEach((page, index) => {
+    if (page.archived) return;
+
+    const title = notion.readTitle(page);
+    const dateStr = notion.readDate(page, source.datePropertyId);
+    const done = notion.readDone(page, source);
+
+    let scheduledAt: string | null = null;
+    let startTime: string | null = null;
+    let bucket: "today" | "week" | "later" = "later";
+    let timeTok: string | null = null;
+    if (dateStr) {
+      const parsed = parseDate(dateStr);
+      scheduledAt = parsed.scheduledAt.toISOString();
+      startTime = parsed.startTime ? parsed.startTime.toISOString() : null;
+      bucket = bucketForDate(parsed.scheduledAt);
+      // Surface the (end) date as a @time pill, mirroring the calendar mapping.
+      timeTok = dateStr.includes("T") ? dateStr.slice(0, 16) : dateStr.slice(0, 10);
+    }
+    const text = `${title}${timeTok ? ` @time:${timeTok}` : ""} @project:${source.projectId}`;
+
+    out.push({
+      id: `notion:${page.id}`,
+      userId: source.userId,
+      text,
+      completed: done,
+      completedAt: done ? page.last_edited_time : null,
+      order: index,
+      bucket,
+      scheduledAt,
+      projectId: source.projectId,
+      startTime,
+      duration: null,
+      source: "notion",
+      externalId: page.id,
+      externalSourceId: source.id,
+      externalUrl: page.url,
+      createdAt: page.last_edited_time,
+      updatedAt: page.last_edited_time,
+      deletedAt: null,
+    });
+  });
+  return out;
+}
+
+async function fetchNotionTasks(source: NotionSource & { account: NotionAccount }): Promise<ExternalTask[]> {
   // Mirror the rows of the selected Notion view (Notion runs its filter/sort).
-  // No view configured → sync every row of the database.
+  // No view configured → every row of the database.
   const pages = source.viewId
     ? await notion.queryView(source.account.accessToken, source.viewId)
     : await notion.queryDatabase(source.account.accessToken, source.databaseId);
-
-  const seen = new Set<string>();
-  for (const page of pages) {
-    if (page.archived) continue;
-    seen.add(page.id);
-
-    const text = `${notion.readTitle(page)} @project:${source.projectId}`;
-    const dateStr = notion.readDate(page, source.datePropertyId);
-    const done = notion.readDone(page, source);
-    const externalUpdatedAt = new Date(page.last_edited_time);
-
-    const scheduledFields = dateStr
-      ? (() => {
-          const { scheduledAt, startTime } = parseDate(dateStr);
-          return { bucket: bucketForDate(scheduledAt), scheduledAt, startTime };
-        })()
-      : { bucket: "later" as const, scheduledAt: null, startTime: null };
-
-    const existing = await prisma.task.findUnique({
-      where: { externalSourceId_externalId: { externalSourceId: source.id, externalId: page.id } },
-    });
-
-    // Skip re-applying remote state when Notion hasn't changed since we last saw
-    // it — protects a local edit that hasn't yet been written back. But Notion's
-    // last_edited_time is only minute-resolution, so an edit made in the same
-    // clock-minute we last synced doesn't advance the marker; without the
-    // content check below, such a change would be lost forever. So only skip
-    // when the marker hasn't advanced AND the derived fields already match.
-    const remoteMatches =
-      existing != null &&
-      existing.text === text &&
-      existing.completed === done &&
-      (existing.scheduledAt?.getTime() ?? null) === (scheduledFields.scheduledAt?.getTime() ?? null) &&
-      (existing.startTime?.getTime() ?? null) === (scheduledFields.startTime?.getTime() ?? null);
-    if (existing?.externalUpdatedAt && existing.externalUpdatedAt >= externalUpdatedAt && remoteMatches) continue;
-
-    const completedAt = done ? (existing?.completedAt ?? new Date()) : null;
-    await prisma.task.upsert({
-      where: { externalSourceId_externalId: { externalSourceId: source.id, externalId: page.id } },
-      create: {
-        userId: source.userId,
-        text,
-        projectId: source.projectId,
-        source: "notion",
-        externalId: page.id,
-        externalSourceId: source.id,
-        externalUrl: page.url,
-        externalUpdatedAt,
-        completed: done,
-        completedAt,
-        ...scheduledFields,
-      },
-      update: {
-        text,
-        projectId: source.projectId,
-        externalUrl: page.url,
-        externalUpdatedAt,
-        completed: done,
-        completedAt,
-        deletedAt: null,
-        ...scheduledFields,
-      },
-    });
-  }
-
-  await softDeleteMissing(source.id, seen, { userId: source.userId });
-  await prisma.notionSource.update({ where: { id: source.id }, data: { lastSyncedAt: new Date() } });
+  return mapNotionPages(source, pages);
 }
 
-async function softDeleteMissing(
-  externalSourceId: string,
-  seen: Set<string>,
-  filter: { userId: string; scheduledAfter?: Date },
-): Promise<void> {
-  const rows = await prisma.task.findMany({
-    where: {
-      externalSourceId,
-      deletedAt: null,
-      ...(filter.scheduledAfter ? { scheduledAt: { gte: filter.scheduledAfter } } : {}),
-    },
-    select: { id: true, externalId: true },
-  });
-  const stale = rows.filter((r) => r.externalId && !seen.has(r.externalId)).map((r) => r.id);
-  if (stale.length) await prisma.task.updateMany({ where: { id: { in: stale } }, data: { deletedAt: new Date() } });
-}
+// ---- public API ------------------------------------------------------------
 
-// Detach a source: keep its imported tasks as plain local tasks. Strips the
-// project pill (`@project:<id>` token + projectId) and the external linkage so
-// nothing dangles — otherwise a detached task keeps a token pointing at a
-// project/source that's gone and renders an "unknown" pill.
-export async function detachSourceTasks(externalSourceId: string, projectId: string, userId: string): Promise<void> {
-  const tasks = await prisma.task.findMany({
-    where: { externalSourceId, userId, deletedAt: null },
-    select: { id: true, text: true },
-  });
-  const re = new RegExp(`\\s*@project:${projectId}\\b`, "g");
-  for (const t of tasks) {
-    await prisma.task.update({
-      where: { id: t.id },
-      data: {
-        projectId: null,
-        text: t.text.replace(re, "").replace(/\s+/g, " ").trim(),
-        source: "manual",
-        externalId: null,
-        externalSourceId: null,
-        externalUrl: null,
-        externalUpdatedAt: null,
-      },
-    });
-  }
-}
-
-// ---- orchestration ---------------------------------------------------------
-
-// Sync every source for a user whose lastSyncedAt is stale (or forced). Returns
-// silently-collected errors so one bad source doesn't abort the rest.
-export async function syncUser(userId: string, { force = false }: { force?: boolean } = {}): Promise<void> {
-  const staleBefore = new Date(Date.now() - STALE_MS);
-  const isStale = (t: Date | null) => force || !t || t < staleBefore;
-
-  const [calSources, notionSources] = await Promise.all([
+// Fetch every external source for a user and return their items as task-shaped
+// objects. One bad source doesn't sink the rest.
+export async function listExternalTasks(userId: string): Promise<ExternalTask[]> {
+  const [calSources, notionSources, completions] = await Promise.all([
     prisma.calendarSource.findMany({ where: { userId }, include: { account: true } }),
     prisma.notionSource.findMany({ where: { userId }, include: { account: true } }),
+    prisma.googleCompletion.findMany({ where: { userId }, select: { key: true } }),
   ]);
-
-  await Promise.allSettled([
-    ...calSources.filter((s) => isStale(s.lastSyncedAt)).map((s) => syncCalendarSource(s)),
-    ...notionSources.filter((s) => isStale(s.lastSyncedAt)).map((s) => syncNotionSource(s)),
-  ]).then((results) => {
-    for (const r of results) if (r.status === "rejected") console.error("[integrations] sync failed:", r.reason);
-  });
-}
-
-// Cron: sync all sources across all users that are stale.
-export async function syncAllStale(): Promise<void> {
-  const staleBefore = new Date(Date.now() - STALE_MS);
-  const [calSources, notionSources] = await Promise.all([
-    prisma.calendarSource.findMany({
-      where: { OR: [{ lastSyncedAt: null }, { lastSyncedAt: { lt: staleBefore } }] },
-      include: { account: true },
-    }),
-    prisma.notionSource.findMany({
-      where: { OR: [{ lastSyncedAt: null }, { lastSyncedAt: { lt: staleBefore } }] },
-      include: { account: true },
-    }),
-  ]);
+  const done = new Set(completions.map((c) => c.key));
 
   const results = await Promise.allSettled([
-    ...calSources.map((s) => syncCalendarSource(s)),
-    ...notionSources.map((s) => syncNotionSource(s)),
+    ...calSources.map((s) => fetchCalendarTasks(s, done)),
+    ...notionSources.map((s) => fetchNotionTasks(s)),
   ]);
-  for (const r of results) if (r.status === "rejected") console.error("[integrations] cron sync failed:", r.reason);
+
+  const out: ExternalTask[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled") out.push(...r.value);
+    else console.error("[integrations] fetch failed:", r.reason);
+  }
+  return out;
 }
 
-// Best-effort write-back of a local completion change to Notion. Called
-// fire-and-forget from the task sync op; never throws to the caller.
-export async function writeBackNotionDone(taskId: string, completed: boolean): Promise<void> {
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
-  if (!task?.externalSourceId || task.source !== "notion" || !task.externalId) return;
-  const source = await prisma.notionSource.findUnique({
-    where: { id: task.externalSourceId },
-    include: { account: true },
-  });
-  if (!source?.statusPropertyId) return;
-  try {
-    await notion.updatePageDone(
-      source.account.accessToken,
-      task.externalId,
-      { statusPropertyId: source.statusPropertyId, statusPropType: source.statusPropType, doneValue: source.doneValue },
-      completed,
-    );
-    // Bump our stored marker so the next pull doesn't treat Notion's resulting
-    // last_edited_time bump as a remote change to re-apply.
-    await prisma.task.update({ where: { id: taskId }, data: { externalUpdatedAt: new Date() } });
-  } catch (err) {
-    console.error("[integrations] notion write-back failed:", err);
+// Mark a Google-sourced task done/undone. Google can't hold this bit (the scope
+// is read-only and Calendar has no done-state), so it lives in our set — the
+// single exception to "the external system is the source of truth". Everything
+// else about the event still comes from Google on every fetch.
+export async function setGoogleTaskDone(
+  userId: string,
+  input: { externalId: string; scheduledAt: string; completed: boolean },
+): Promise<void> {
+  const key = completionKey(input.externalId, input.scheduledAt);
+  if (input.completed) {
+    await prisma.googleCompletion.upsert({
+      where: { userId_key: { userId, key } },
+      create: { userId, key },
+      update: {},
+    });
+  } else {
+    await prisma.googleCompletion.deleteMany({ where: { userId, key } });
   }
 }
 
-// Best-effort write-back of a local reschedule to Notion's date property.
-// Called fire-and-forget from the task sync op; never throws to the caller.
-export async function writeBackNotionDate(taskId: string): Promise<void> {
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
-  if (!task?.externalSourceId || task.source !== "notion" || !task.externalId) return;
-  const source = await prisma.notionSource.findUnique({
-    where: { id: task.externalSourceId },
+// Write an edit made in the app straight back to a Notion page. Supports the
+// three editable fields — title (stripped of tokens), scheduled date, and
+// done-state. No local Task row is involved.
+export async function editNotionTask(
+  userId: string,
+  input: { externalSourceId: string; externalId: string; title?: string; date?: string | null; completed?: boolean },
+): Promise<void> {
+  const source = await prisma.notionSource.findFirst({
+    where: { id: input.externalSourceId, userId },
     include: { account: true },
   });
-  if (!source?.datePropertyId) return;
-  try {
-    // startTime present → a timed value (keep wall-clock); otherwise all-day,
-    // written as the date-only string so Notion doesn't invent a time.
-    const value = task.scheduledAt
-      ? task.startTime
-        ? { date: task.startTime.toISOString(), timed: true }
-        : { date: task.scheduledAt.toISOString().slice(0, 10), timed: false }
-      : null;
-    await notion.updatePageDate(source.account.accessToken, task.externalId, source.datePropertyId, value);
-    // Bump our stored marker so the next pull doesn't treat Notion's resulting
-    // last_edited_time bump as a remote change to re-apply.
-    await prisma.task.update({ where: { id: taskId }, data: { externalUpdatedAt: new Date() } });
-  } catch (err) {
-    console.error("[integrations] notion date write-back failed:", err);
+  if (!source) throw createError({ statusCode: 404, statusMessage: "Notion source not found" });
+  const token = source.account.accessToken;
+
+  if (input.title !== undefined) {
+    await notion.updatePageTitle(token, input.externalId, input.title);
+  }
+  if (input.completed !== undefined && source.statusPropertyId) {
+    await notion.updatePageDone(
+      token,
+      input.externalId,
+      { statusPropertyId: source.statusPropertyId, statusPropType: source.statusPropType, doneValue: source.doneValue },
+      input.completed,
+    );
+  }
+  if (input.date !== undefined && source.datePropertyId) {
+    const value = input.date ? { date: input.date, timed: input.date.includes("T") } : null;
+    await notion.updatePageDate(token, input.externalId, source.datePropertyId, value);
   }
 }

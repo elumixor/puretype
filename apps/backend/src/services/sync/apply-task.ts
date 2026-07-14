@@ -1,4 +1,3 @@
-import { writeBackNotionDate, writeBackNotionDone } from "services/integrations/sync";
 import { prisma } from "services/prisma";
 import type { OpInput, OpResult } from "./schemas";
 
@@ -55,18 +54,6 @@ export async function applyTaskOp(userId: string, op: Extract<OpInput, { kind: `
           ...(scheduledAt !== undefined ? { scheduledAt: scheduledAt ? new Date(scheduledAt) : null } : {}),
         },
       });
-      // Two-way sync: mirror a completion or reschedule on a Notion-sourced
-      // task back to its page. Awaited (not fire-and-forget) so it actually
-      // runs before this serverless invocation returns; each self-catches and
-      // never throws, and the user's edit already applied optimistically on the
-      // client. A bucket change re-stamps scheduledAt, so it counts as a
-      // reschedule too.
-      if (cur.source === "notion") {
-        if (completed !== undefined && completed !== cur.completed) await writeBackNotionDone(op.id, completed);
-        const dateChanged =
-          scheduledAt !== undefined || startTime !== undefined || rest.bucket !== undefined;
-        if (dateChanged) await writeBackNotionDate(op.id);
-      }
       return { ok: true };
     }
     case "task.delete": {

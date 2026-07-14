@@ -1,12 +1,11 @@
 import { createError } from "h3";
 import { requireAuth } from "services/auth";
-import { syncNotionSource } from "services/integrations/sync";
 import { prisma } from "services/prisma";
 import { handler } from "utils";
 import { z } from "zod";
 
-// Bind a Notion database to a project with its date/status mapping, then pull
-// it in immediately.
+// Bind a Notion database to a project with its date/status mapping. Its rows
+// aren't persisted — the client picks them up on its next live external fetch.
 export default handler(
   {
     body: {
@@ -56,11 +55,6 @@ export default handler(
       include: { account: true },
     });
 
-    try {
-      await syncNotionSource(source);
-    } catch (err) {
-      console.error("[integrations] initial notion sync failed:", err);
-    }
     const { account: _omit, ...rest } = source;
     return rest;
   },

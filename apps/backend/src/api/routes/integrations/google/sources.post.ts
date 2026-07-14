@@ -1,12 +1,11 @@
 import { createError } from "h3";
 import { requireAuth } from "services/auth";
-import { syncCalendarSource } from "services/integrations/sync";
 import { prisma } from "services/prisma";
 import { handler } from "utils";
 import { z } from "zod";
 
-// Bind a calendar to a project and pull it in immediately so its events show
-// up on the client's next sync.
+// Bind a calendar to a project. Its events aren't persisted — the client picks
+// them up on its next live external fetch.
 export default handler(
   { body: { accountId: z.string(), calendarId: z.string(), calendarName: z.string(), projectId: z.string() } },
   async ({ user, body }) => {
@@ -31,11 +30,6 @@ export default handler(
       include: { account: true },
     });
 
-    try {
-      await syncCalendarSource(source);
-    } catch (err) {
-      console.error("[integrations] initial calendar sync failed:", err);
-    }
     const { account: _omit, ...rest } = source;
     return rest;
   },

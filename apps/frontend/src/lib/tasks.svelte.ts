@@ -1,10 +1,19 @@
-import type { Bucket, Task } from "$lib/api";
+import { api, type Bucket, type ExternalTask, type Task } from "$lib/api";
 import { newId } from "$lib/db/id";
 import { del, getAll, put, putMany } from "$lib/db/idb";
 import { enqueue } from "$lib/db/outbox";
 import { onPulled, sync } from "$lib/sync.svelte";
+import { toasts } from "$lib/toast.svelte";
+import { bucketForDate, parseISO, stripTokens } from "$lib/tokens";
 
 type MaybeDeleted = Task & { deletedAt?: string | null };
+
+// External tasks (Notion/Google) carry synthetic ids so the store can tell them
+// apart from local rows and route edits to the source instead of the outbox.
+export const isExternalId = (id: string): boolean => id.startsWith("notion:") || id.startsWith("google:");
+
+// The raw @time token value ("YYYY-MM-DD" or "YYYY-MM-DDTHH:MM") if present.
+const readTimeToken = (text: string): string | null => text.match(/@time:([^\s@]+)/)?.[1] ?? null;
 
 // Offline-first tasks store. Same pattern as projects: IDB hydrate on boot,
 // optimistic local writes, enqueued ops for sync. Bucket-based scheduling
@@ -12,7 +21,11 @@ type MaybeDeleted = Task & { deletedAt?: string | null };
 // moves into today/week.
 
 class TasksStore {
+  // Local, offline-first tasks (persisted in IDB, synced via the outbox).
   list = $state<Task[]>([]);
+  // Live external tasks (Notion/Google). In-memory only — never persisted; the
+  // source is the truth. Online-only.
+  external = $state<ExternalTask[]>([]);
   // Id of the most recently created task — TaskItem scrolls it into view and
   // flashes it once, then clears this (#42).
   focusId = $state<string | null>(null);
@@ -26,9 +39,16 @@ class TasksStore {
     if (this.focusId === id) this.focusId = null;
   }
 
+  // Local + external, as one list for display/filtering. ExternalTask is a
+  // superset of Task, so the extra provenance fields are simply ignored by
+  // display code.
+  get all(): Task[] {
+    return [...this.list, ...(this.external as unknown as Task[])];
+  }
+
   get byBucket(): Record<Bucket, Task[]> {
     const out: Record<Bucket, Task[]> = { today: [], week: [], later: [] };
-    for (const t of this.list) out[t.bucket as Bucket].push(t);
+    for (const t of this.all) out[t.bucket as Bucket].push(t);
     for (const b of ["today", "week", "later"] as Bucket[]) {
       out[b].sort((a, b) => a.order - b.order);
     }
@@ -39,7 +59,21 @@ class TasksStore {
     if (this.booted) return;
     this.booted = true;
     const cached = await getAll<Task>("tasks");
-    this.list = cached.filter((t) => !(t as Task & { deletedAt?: string | null }).deletedAt);
+    // One-time cleanup: external items used to be persisted as local rows and
+    // are now fetched live. Drop any legacy cached copies (identified by their
+    // old provenance fields) so they don't duplicate the live-fetched ones.
+    const legacy = new Set(
+      cached
+        .filter((t) => {
+          const x = t as { source?: string; externalId?: string | null };
+          return (x.source != null && x.source !== "manual") || x.externalId != null;
+        })
+        .map((t) => t.id),
+    );
+    if (legacy.size) await Promise.all([...legacy].map((id) => del("tasks", id)));
+    this.list = cached.filter(
+      (t) => !(t as Task & { deletedAt?: string | null }).deletedAt && !legacy.has(t.id),
+    );
     onPulled(({ tasks }) => {
       if (!tasks.length) return;
       const map = new Map(this.list.map((t) => [t.id, t]));
@@ -58,10 +92,21 @@ class TasksStore {
       this.list = Array.from(map.values());
     });
     sync.schedule(0);
+    void this.refreshExternal();
+  }
+
+  // Pull the live external tasks (Notion/Google). In-memory only; online-only.
+  async refreshExternal() {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    try {
+      this.external = await api.integrations.tasks.$get();
+    } catch (err) {
+      console.warn("[tasks] external fetch failed", err);
+    }
   }
 
   byId(id: string): Task | undefined {
-    return this.list.find((t) => t.id === id);
+    return this.all.find((t) => t.id === id);
   }
 
   // Apply a task record that the server already persisted (e.g. via the voice
@@ -124,6 +169,7 @@ class TasksStore {
   }
 
   async update(id: string, patch: Partial<Task>): Promise<Task | undefined> {
+    if (isExternalId(id)) return this.updateExternal(id, patch);
     const cur = this.byId(id);
     if (!cur) return undefined;
     const now = new Date().toISOString();
@@ -151,6 +197,85 @@ class TasksStore {
     return updated;
   }
 
+  // Edit a live external task: apply optimistically in memory, then write the
+  // change straight back to the source. No IDB, no outbox. Reverts on failure.
+  //
+  // Notion takes any edit. Google takes completion only — the calendar.readonly
+  // scope means we can't push text or dates back, so Google keeps owning those.
+  private async updateExternal(id: string, patch: Partial<Task>): Promise<Task | undefined> {
+    const cur = this.external.find((t) => t.id === id);
+    if (!cur) return undefined;
+    if (cur.source === "google") return this.updateGoogle(cur, patch);
+
+    // Derive the optimistic next state. Text edits carry the date as a @time
+    // token, so re-derive scheduledAt/bucket from it; a completion toggle just
+    // flips done. Buckets aren't independently editable (they follow the date).
+    const now = new Date().toISOString();
+    const nextText = patch.text ?? cur.text;
+    const token = patch.text !== undefined ? readTimeToken(nextText) : null;
+    const parsed = token ? parseISO(token) : null;
+    const dateFields =
+      patch.text !== undefined
+        ? {
+            scheduledAt: parsed ? parsed.date.toISOString() : null,
+            startTime: parsed?.hasTime ? parsed.date.toISOString() : null,
+            bucket: parsed ? bucketForDate(parsed.date) : ("later" as Bucket),
+          }
+        : {};
+    const completionFields =
+      patch.completed !== undefined ? { completed: patch.completed, completedAt: patch.completed ? now : null } : {};
+    const updated = { ...cur, ...patch, ...dateFields, ...completionFields, updatedAt: now } as ExternalTask;
+    this.external = this.external.map((t) => (t.id === id ? updated : t));
+
+    try {
+      await api.integrations.notion.task.$post({
+        externalSourceId: cur.externalSourceId,
+        externalId: cur.externalId,
+        ...(patch.text !== undefined ? { title: stripTokens(nextText), date: token } : {}),
+        ...(patch.completed !== undefined ? { completed: patch.completed } : {}),
+      });
+    } catch (err) {
+      // Revert the optimistic change; surface the failure to the caller.
+      this.external = this.external.map((t) => (t.id === id ? cur : t));
+      toasts.error("Couldn't update Notion — please try again");
+      throw err;
+    }
+    return updated as unknown as Task;
+  }
+
+  // Google-sourced tasks: completion only. The event's text, time and
+  // recurrence are Google's to own — we hold nothing but the done bit, keyed to
+  // the occurrence (scheduledAt), so ticking off today's standup doesn't tick
+  // off next week's.
+  private async updateGoogle(cur: ExternalTask, patch: Partial<Task>): Promise<Task | undefined> {
+    if (patch.completed === undefined) {
+      toasts.error("Calendar events can only be completed — edit them in Google Calendar");
+      return cur as unknown as Task;
+    }
+
+    const completed = patch.completed;
+    const updated = {
+      ...cur,
+      completed,
+      completedAt: completed ? cur.scheduledAt : null,
+      updatedAt: new Date().toISOString(),
+    } as ExternalTask;
+    this.external = this.external.map((t) => (t.id === cur.id ? updated : t));
+
+    try {
+      await api.integrations.google.task.$post({
+        externalId: cur.externalId,
+        scheduledAt: cur.scheduledAt ?? "",
+        completed,
+      });
+    } catch (err) {
+      this.external = this.external.map((t) => (t.id === cur.id ? cur : t));
+      toasts.error("Couldn't update — please try again");
+      throw err;
+    }
+    return updated as unknown as Task;
+  }
+
   // Restore a previously soft-deleted task. Used by the voice undo flow when
   // the last turn included a `delete` action. The original row id is reused.
   async restore(task: Task) {
@@ -163,6 +288,10 @@ class TasksStore {
   }
 
   async remove(id: string) {
+    if (isExternalId(id)) {
+      toasts.error(id.startsWith("google:") ? "Delete this event in Google Calendar" : "Delete this task in Notion");
+      return;
+    }
     const cur = this.byId(id);
     if (!cur) return;
     this.list = this.list.filter((t) => t.id !== id);
@@ -178,6 +307,9 @@ class TasksStore {
   // Reorder within / across buckets. Pass the full reordered slice for the
   // bucket(s) affected — each item's new order index is implicit.
   async reorder(items: { id: string; order: number; bucket: Bucket }[]) {
+    // External tasks aren't ordered locally (they follow the source); drop them.
+    items = items.filter((it) => !isExternalId(it.id));
+    if (!items.length) return;
     const byId = new Map(this.list.map((t) => [t.id, t]));
     const now = new Date().toISOString();
     const updated: Task[] = [];

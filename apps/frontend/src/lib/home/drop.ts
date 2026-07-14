@@ -1,6 +1,6 @@
 import type { Bucket, Task } from "$lib/api";
 import { isArchived } from "$lib/archive.svelte";
-import { tasks as tasksStore } from "$lib/tasks.svelte";
+import { isExternalId, tasks as tasksStore } from "$lib/tasks.svelte";
 import { type DisplayBucket, displayBucket } from "$lib/tokens";
 
 // Map a list id ("bucket:today" etc.) to the stored bucket value. Dropping
@@ -26,7 +26,8 @@ export async function commitDrop({ taskIds, to, index }: DropCommit, tasks: Task
   const targetBucket = bucketFromListId(to);
   if (!targetBucket) return;
 
-  const dragged = taskIds.map((id) => tasksStore.byId(id)).filter((t): t is Task => !!t);
+  // External tasks (Notion/Google) aren't reorderable — they follow the source.
+  const dragged = taskIds.map((id) => tasksStore.byId(id)).filter((t): t is Task => !!t && !isExternalId(t.id));
   if (dragged.length === 0) return;
 
   // Build peers in the SAME order TaskList renders — pending sorted by

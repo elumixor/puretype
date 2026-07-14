@@ -14,7 +14,33 @@ model User {
   notionAccounts    NotionAccount[]
   calendarSources   CalendarSource[]
   notionSources     NotionSource[]
+  googleCompletions GoogleCompletion[]
   createdAt DateTime @default(now())
+}
+
+// The one bit Google Calendar cannot represent: "I did this."
+//
+// Calendar events have no done-state and our OAuth scope is calendar.readonly,
+// so a completion has nowhere to go but here. This is a set, not a task mirror
+// — Google stays the source of truth for text, time and recurrence; we store
+// only membership. Nothing here can diverge from Google, because Google never
+// writes it.
+//
+// `key` is "<eventId>:<YYYY-MM-DD>" — the event plus WHICH occurrence. A
+// recurring event's id is the series master, so keying on the id alone would
+// mark every future standup done the moment you ticked one off. One-off events
+// use their own date, so the rule is uniform. The date lives inside the key,
+// which is also how old rows get pruned (string compare, no timestamp column).
+//
+// userId is part of the identity, not just a filter: event ids are unique per
+// *calendar*, so two users on a shared calendar see the same id and must be
+// able to complete it independently.
+model GoogleCompletion {
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key    String
+
+  @@id([userId, key])
 }
 
 // A connected Google account (full OAuth, Calendar scope) — distinct from the
@@ -48,8 +74,6 @@ model CalendarSource {
   calendarName    String
   projectId       String
   project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  syncToken       String?       // Google incremental sync token
-  lastSyncedAt    DateTime?
   createdAt       DateTime      @default(now())
 
   @@unique([googleAccountId, calendarId])
@@ -75,8 +99,8 @@ model NotionAccount {
 }
 
 // Binds a Notion database (optionally a specific view) to a project, with the
-// property mapping used to sync date + done-state. Two-way: local completion
-// writes back to the mapped status property.
+// property mapping used to read date + done-state. Rows are fetched live (not
+// persisted); in-app edits write straight back to the page.
 model NotionSource {
   id               String        @id @default(cuid())
   userId           String
@@ -93,7 +117,6 @@ model NotionSource {
   statusPropType   String?       // "checkbox" | "status" | "select"
   doneValue        String?       // status/select option name that means done
   filters          String?       // JSON array of row-sync filter conditions
-  lastSyncedAt     DateTime?
   createdAt        DateTime      @default(now())
 
   @@unique([notionAccountId, databaseId])
@@ -199,19 +222,10 @@ model Task {
   projectId   String?
   startTime   DateTime?
   duration    Int? // minutes
-  // External-source provenance. "manual" tasks are created in-app; "google" /
-  // "notion" tasks mirror an external item and are upserted by the sync engine.
-  source           String    @default("manual") // manual | google | notion
-  externalId       String?   // provider item id (calendar event id / notion page id)
-  externalSourceId String?   // CalendarSource.id or NotionSource.id
-  externalUrl      String?
-  externalUpdatedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  @@unique([externalSourceId, externalId])
   @@index([userId])
   @@index([userId, updatedAt])
-  @@index([externalSourceId])
 }

@@ -18,7 +18,7 @@ export default handler(async ({ user }) => {
         id: true,
         email: true,
         calendarSources: {
-          select: { id: true, calendarId: true, calendarName: true, projectId: true, lastSyncedAt: true },
+          select: { id: true, calendarId: true, calendarName: true, projectId: true },
         },
       },
     }),
@@ -40,7 +40,6 @@ export default handler(async ({ user }) => {
             statusPropertyId: true,
             statusPropType: true,
             doneValue: true,
-            lastSyncedAt: true,
           },
         },
       },

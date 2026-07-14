@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api } from "$lib/api";
   import { archivePop, isArchived } from "$lib/archive.svelte";
   import type { Task } from "$lib/api";
   import BottomComposer from "$lib/components/BottomComposer.svelte";
@@ -30,13 +29,13 @@
   import { projects } from "$lib/projects.svelte";
   import { settings } from "$lib/settings.svelte";
   import { refreshEntitlement } from "$lib/storekit";
-  import { sync } from "$lib/sync.svelte";
   import { ls } from "$lib/storage";
   import { tasks as tasksStore } from "$lib/tasks.svelte";
   import { displayBucket, taskProjectIds } from "$lib/tokens";
   import { voiceTurn } from "$lib/voice-turn.svelte";
 
-  const tasks = $derived(tasksStore.list);
+  // Local + live external tasks, merged for display.
+  const tasks = $derived(tasksStore.all);
   let voiceBubbleEl: HTMLDivElement | undefined = $state();
   let addInput: RichTaskInput | undefined = $state();
   let pickerOpen = $state(false);
@@ -84,7 +83,8 @@
     void settings.boot();
     void refreshEntitlement();
     void loadHiddenBuckets();
-    void refreshIntegrations();
+    // boot() already does an initial external fetch; refresh again whenever the
+    // tab regains focus so edits made in Notion show up.
     resumeOAuthReturn();
     dnd.onDrop = (e) => commitDrop(e, tasks);
     const onKey = buildGlobalKeydown({
@@ -94,13 +94,18 @@
       canRedo: () => voiceTurn.canRedo,
       togglePicker: () => (pickerOpen = !pickerOpen),
     });
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshIntegrations();
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onOutsidePointerDown, true);
     window.addEventListener("blur", onWindowBlur);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onOutsidePointerDown, true);
       window.removeEventListener("blur", onWindowBlur);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   });
 
@@ -119,15 +124,10 @@
     if (connected && pending === status) resumeSource = status;
   }
 
-  // Nudge the server to pull any stale external sources (Google/Notion), then
-  // sync so the fresh tasks land locally. Cheap no-op for users with none.
-  async function refreshIntegrations() {
-    try {
-      await api.integrations.refresh.$post();
-      sync.schedule(0);
-    } catch {
-      // best-effort; the periodic sync + cron will still catch up
-    }
+  // Fetch the live external tasks (Notion/Google) and merge them into the view.
+  // In-memory only — the source is the truth. Cheap no-op for users with none.
+  function refreshIntegrations() {
+    void tasksStore.refreshExternal();
   }
 
   async function loadHiddenBuckets() {
