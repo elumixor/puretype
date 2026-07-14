@@ -6,6 +6,7 @@
     "apps/*"
   ],
   "scripts": {
+    "setup": "bun scripts/setup.ts",
     "dev": "devkit",
     "dev:open": "devkit --open",
     "ios": "bun --filter frontend ios",
