@@ -44,6 +44,8 @@
       ],
       "terraform": "infra",
       "steps": [
+        "ln -sfn ../../.env apps/backend/.env",
+        "ln -sfn ../../.env apps/frontend/.env",
         "bun --filter backend prisma:generate"
       ]
     }
