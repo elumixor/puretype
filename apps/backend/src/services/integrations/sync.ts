@@ -59,12 +59,16 @@ export function completionKey(externalId: string, scheduledAt: Date | string): s
 }
 
 function mapCalendarEvents(source: CalendarSource, events: google.CalendarEvent[], done: Set<string>): ExternalTask[] {
-  // One visibility window for everything on this calendar. A recurring series
-  // is judged on its next occurrence, a one-off on its own start — otherwise a
+  // One visibility rule for everything on this calendar. A recurring series is
+  // judged on its next occurrence, a one-off on its own start — otherwise a
   // yearly birthday squats in the list all year (recurring) or a meeting six
   // weeks out clutters it (one-off).
   const windowStart = new Date(Date.now() - DAYS_BACK * 86_400_000);
-  const windowEnd = new Date(Date.now() + source.horizonDays * 86_400_000);
+  const windowEnd = source.horizonDays == null ? null : new Date(Date.now() + source.horizonDays * 86_400_000);
+  // No horizon set → keep only what lands in today/this week. Anything that
+  // buckets to "later" is hidden.
+  const visible = (at: Date) =>
+    at >= windowStart && (windowEnd ? at <= windowEnd : bucketForDate(at) !== "later");
   const out: ExternalTask[] = [];
 
   events.forEach((ev, index) => {
@@ -88,7 +92,7 @@ function mapCalendarEvents(source: CalendarSource, events: google.CalendarEvent[
     } else {
       ({ scheduledAt, startTime } = parseDate(startRaw));
     }
-    if (scheduledAt < windowStart || scheduledAt > windowEnd) return;
+    if (!visible(scheduledAt)) return;
     const bucket = bucketForDate(scheduledAt);
 
     const summary = (ev.summary ?? "").trim() || "(untitled event)";
@@ -135,9 +139,11 @@ async function fetchCalendarTasks(
   source: CalendarSource & { account: GoogleAccount },
   done: Set<string>,
 ): Promise<ExternalTask[]> {
+  // With no horizon the cutoff is the end of the current week — at most 7 days
+  // out, so 8 always covers it. mapCalendarEvents does the exact filtering.
   const events = await google.listEvents(source.account, source.calendarId, {
     daysBack: DAYS_BACK,
-    daysAhead: source.horizonDays,
+    daysAhead: source.horizonDays ?? 8,
   });
   return mapCalendarEvents(source, events, done);
 }

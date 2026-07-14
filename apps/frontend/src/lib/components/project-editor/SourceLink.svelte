@@ -4,6 +4,7 @@
   import { api } from "$lib/api/client";
   import { projects } from "$lib/projects.svelte";
   import { sync } from "$lib/sync.svelte";
+  import { tasks } from "$lib/tasks.svelte";
   import BrandIcon from "../icons/BrandIcon.svelte";
   import Select from "../ui/Select.svelte";
 
@@ -73,6 +74,28 @@
       busy = false;
     }
   }
+  // Empty box = no horizon = today + the rest of this calendar week (so on a
+  // Saturday, just Saturday and Sunday). A number is an explicit days-ahead
+  // window. Events aren't persisted, so this only changes what the next live
+  // fetch returns — hence the immediate refetch.
+  async function setHorizon(id: string, raw: string) {
+    const trimmed = raw.trim();
+    let horizonDays: number | null = null;
+    if (trimmed) {
+      const n = Number(trimmed);
+      if (!Number.isInteger(n) || n < 1 || n > 365) return;
+      horizonDays = n;
+    }
+    busy = true;
+    try {
+      await api.integrations.google.sources(id).$patch({ horizonDays });
+      await load();
+      await tasks.refreshExternal();
+    } finally {
+      busy = false;
+    }
+  }
+
   async function detachNotion(id: string) {
     busy = true;
     try {
@@ -144,6 +167,22 @@
       <div class="flex items-center gap-2.5 rounded-lg border border-border bg-surface px-3 h-11">
         <BrandIcon brand="google" size={16} />
         <span class="text-sm text-ink truncate flex-1 min-w-0">{s.calendarName}</span>
+        <label class="flex items-center gap-1.5 text-xs text-ink-3 shrink-0">
+          <input
+            type="number"
+            min="1"
+            max="365"
+            value={s.horizonDays ?? ""}
+            placeholder="wk"
+            disabled={busy}
+            onchange={(e) => setHorizon(s.id, e.currentTarget.value)}
+            aria-label="Days ahead to show — empty for this week only"
+            title="Days ahead to show. Empty = today and the rest of this week only."
+            class="w-12 rounded border border-border bg-bg px-1.5 py-0.5 text-center text-ink
+                   placeholder:text-ink-3 disabled:opacity-50 focus:outline-none focus:border-accent"
+          />
+          <span>{s.horizonDays == null ? "this week" : "days"}</span>
+        </label>
         <button
           type="button"
           onclick={() => detachCalendar(s.id)}

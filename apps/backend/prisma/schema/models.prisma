@@ -74,11 +74,17 @@ model CalendarSource {
   calendarName    String
   projectId       String
   project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  // How far ahead this calendar's events are shown, in days. The visibility
-  // window for both one-off events and the next occurrence of a recurring
-  // series — a noisy birthday calendar can be kept short while a work calendar
-  // runs long.
-  horizonDays     Int           @default(7)
+  // How far ahead this calendar's events are shown.
+  //
+  // null (the default) means "no horizon": show only what falls in today/this
+  // week and hide the rest. That is deliberately not expressible as a day count
+  // — the end of the current week drifts (7 days out on Monday, 1 on Sunday) —
+  // which is why this is nullable rather than defaulted to 7.
+  //
+  // A number overrides it with a rolling window of that many days, for looking
+  // further ahead. Applies to one-off events and to the next occurrence of a
+  // recurring series alike.
+  horizonDays     Int?
   createdAt       DateTime      @default(now())
 
   @@unique([googleAccountId, calendarId])
