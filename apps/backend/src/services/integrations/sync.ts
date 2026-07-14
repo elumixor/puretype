@@ -46,6 +46,10 @@ function parseDate(value: string): { scheduledAt: Date; startTime: Date | null }
 
 // ---- Google Calendar -------------------------------------------------------
 
+// Yesterday's events still show, so a missed task can be ticked off. Only the
+// forward horizon is configurable (CalendarSource.horizonDays).
+const DAYS_BACK = 1;
+
 // Which occurrence of an event a completion refers to. Must be derived
 // identically on the write path (the client echoes back the task's scheduledAt
 // date), or a tick-off won't match the task it came from.
@@ -55,10 +59,12 @@ export function completionKey(externalId: string, scheduledAt: Date | string): s
 }
 
 function mapCalendarEvents(source: CalendarSource, events: google.CalendarEvent[], done: Set<string>): ExternalTask[] {
-  const daysBack = 1;
-  const daysAhead = 45;
-  const windowStart = new Date(Date.now() - daysBack * 86_400_000);
-  const windowEnd = new Date(Date.now() + daysAhead * 86_400_000);
+  // One visibility window for everything on this calendar. A recurring series
+  // is judged on its next occurrence, a one-off on its own start — otherwise a
+  // yearly birthday squats in the list all year (recurring) or a meeting six
+  // weeks out clutters it (one-off).
+  const windowStart = new Date(Date.now() - DAYS_BACK * 86_400_000);
+  const windowEnd = new Date(Date.now() + source.horizonDays * 86_400_000);
   const out: ExternalTask[] = [];
 
   events.forEach((ev, index) => {
@@ -73,25 +79,17 @@ function mapCalendarEvents(source: CalendarSource, events: google.CalendarEvent[
     let scheduledAt: Date;
     let startTime: Date | null;
     let repeatCode: string | null = null;
-    let bucket: "today" | "week" | "later";
     if (ev.recurrence?.length) {
       const rec = parseRecurrence(ev.recurrence, new Date(startRaw));
       if (!rec) return;
-      // A series only materialises when its next occurrence lands in the current
-      // week, and it always files under "week". Without this a yearly birthday
-      // resolves to its next occurrence at any distance and squats in "later"
-      // all year round.
-      if (bucketForDate(rec.next) === "later") return;
       repeatCode = rec.code;
       scheduledAt = rec.next;
       startTime = timed ? rec.next : null;
-      bucket = "week";
     } else {
-      const d = new Date(startRaw);
-      if (d < windowStart || d > windowEnd) return;
       ({ scheduledAt, startTime } = parseDate(startRaw));
-      bucket = bucketForDate(scheduledAt);
     }
+    if (scheduledAt < windowStart || scheduledAt > windowEnd) return;
+    const bucket = bucketForDate(scheduledAt);
 
     const summary = (ev.summary ?? "").trim() || "(untitled event)";
     const timeTok = repeatCode
@@ -137,7 +135,10 @@ async function fetchCalendarTasks(
   source: CalendarSource & { account: GoogleAccount },
   done: Set<string>,
 ): Promise<ExternalTask[]> {
-  const events = await google.listEvents(source.account, source.calendarId, { daysBack: 1, daysAhead: 45 });
+  const events = await google.listEvents(source.account, source.calendarId, {
+    daysBack: DAYS_BACK,
+    daysAhead: source.horizonDays,
+  });
   return mapCalendarEvents(source, events, done);
 }
 

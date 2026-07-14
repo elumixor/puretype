@@ -13,13 +13,10 @@ bun run dev
 the Vercel projects, which Terraform keeps in sync. It skips `VITE_API_URL` (production-only; locally the
 frontend must point at localhost) and Vercel's own injected `VERCEL_*` vars.
 
-Two things it CANNOT recover, because they exist nowhere but the old machine's disk:
-
-- **`infra/terraform.tfvars`** — holds `vercel_api_token` and `github_token`, which are not stored in Vercel
-  or anywhere else. Copy this file across.
-- **`infra/terraform.tfstate`** — Terraform state is **local**, not a remote backend. Without it, a
-  `terraform apply` on the new machine sees an empty state and tries to *recreate* the Vercel projects, domains
-  and DNS records that already exist. Copy `terraform.tfstate` too, or migrate to a remote backend.
+For `infra/`, run `terraform login` — state lives in HCP Terraform (org `atmagaming`, workspace `puretype`),
+so nothing to copy. The one file it cannot recover is **`infra/terraform.tfvars`**, which holds
+`vercel_api_token` and `github_token`. Those are not stored in Vercel or HCP (execution mode is local), so
+copy that file across or regenerate the tokens.
 
 Everything else regenerates: `node_modules`, `apps/backend/generated/` (prisma), `apps/frontend/ios/App/Pods`
 and `capacitor.config.json` (`bun --filter frontend sync`). `bun.lock` is gitignored, so installs are not pinned.

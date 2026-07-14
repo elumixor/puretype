@@ -74,6 +74,11 @@ model CalendarSource {
   calendarName    String
   projectId       String
   project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // How far ahead this calendar's events are shown, in days. The visibility
+  // window for both one-off events and the next occurrence of a recurring
+  // series — a noisy birthday calendar can be kept short while a work calendar
+  // runs long.
+  horizonDays     Int           @default(7)
   createdAt       DateTime      @default(now())
 
   @@unique([googleAccountId, calendarId])

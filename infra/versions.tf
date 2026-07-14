@@ -1,6 +1,13 @@
 terraform {
   required_version = ">= 1.7.0"
 
+  cloud {
+    organization = "atmagaming"
+    workspaces {
+      name = "puretype"
+    }
+  }
+
   required_providers {
     vercel = {
       source  = "vercel/vercel"
