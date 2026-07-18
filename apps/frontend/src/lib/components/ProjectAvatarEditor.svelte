@@ -34,6 +34,10 @@
 
   const parentObjects = $derived(parentsDraft.map((id) => projects.byId(id)).filter((p): p is Project => !!p));
 
+  // Child projects nested under this one. Derived live from the store (nesting is
+  // set from the child's side, so this is read-only here).
+  const childObjects = $derived(projects.childrenOf(project.id));
+
   let busy = $state(false);
   /* svelte-ignore state_referenced_locally */
   let preview = $state<Project>({ ...project });
@@ -124,6 +128,22 @@
       </div>
     </div>
   </div>
+
+  {#if childObjects.length}
+    <div>
+      <div class="text-[11px] font-medium text-[var(--color-ink-3)] mb-1.5">
+        Sub-projects · {childObjects.length}
+      </div>
+      <div class="flex flex-wrap items-center gap-1.5">
+        {#each childObjects as c (c.id)}
+          <span class="pill pill-project">
+            <ProjectAvatar project={c} size={12} />
+            {c.name}
+          </span>
+        {/each}
+      </div>
+    </div>
+  {/if}
 
   <AvatarPicker
     bind:tab

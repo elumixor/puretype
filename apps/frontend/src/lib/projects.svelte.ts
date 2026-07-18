@@ -253,6 +253,11 @@ class ProjectsStore {
     return p.parentIds.map((pid) => this.byId(pid)).filter((x): x is Project => !!x);
   }
 
+  childrenOf(id: string | null | undefined): Project[] {
+    if (!id) return [];
+    return this.list.filter((p) => p.parentIds.includes(id));
+  }
+
   descendantIds(id: string): Set<string> {
     const out = new Set<string>([id]);
     let added = true;
