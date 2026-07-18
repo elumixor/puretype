@@ -14,7 +14,7 @@
 
   const filtered = $derived.by(() => {
     const q = query.trim().toLowerCase();
-    const list = projects.list;
+    const list = projects.active;
     if (!q) return list;
     return list.filter((p) => p.name.toLowerCase().includes(q));
   });

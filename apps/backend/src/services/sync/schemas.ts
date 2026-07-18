@@ -86,6 +86,19 @@ export const ProjectDelete = z.object({
   mode: z.enum(["clear", "purge"]).optional(),
 });
 
+// Archive/restore flip a reversible `archivedAt` flag. An archived project and
+// its tasks are hidden from every view but nothing is destroyed; restore undoes
+// it. Permanent removal still goes through project.delete.
+export const ProjectArchive = z.object({
+  kind: z.literal("project.archive"),
+  id: z.string().min(1),
+});
+
+export const ProjectRestore = z.object({
+  kind: z.literal("project.restore"),
+  id: z.string().min(1),
+});
+
 export const Op = z.union([
   TaskCreate,
   TaskUpdate,
@@ -95,6 +108,8 @@ export const Op = z.union([
   ProjectCreate,
   ProjectUpdate,
   ProjectDelete,
+  ProjectArchive,
+  ProjectRestore,
 ]);
 export type OpInput = z.infer<typeof Op>;
 export type OpResult = { ok: true } | { ok: false; reason: "conflict" | "not_found" | "error"; detail?: string };

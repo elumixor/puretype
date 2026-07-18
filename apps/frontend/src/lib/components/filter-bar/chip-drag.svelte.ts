@@ -23,7 +23,7 @@ class ChipDrag {
     this.ghostWidth = r.width;
     this.ghostX = x;
     this.ghostY = y;
-    const visibleIds = (projects.showHidden ? projects.list : projects.visible).map((q) => q.id);
+    const visibleIds = (projects.showHidden ? projects.active : projects.visible).map((q) => q.id);
     this.#sourceIds = visibleIds;
     this.dropIndex = visibleIds.indexOf(p.id);
     document.documentElement.classList.add("dnd-dragging");
@@ -78,7 +78,7 @@ class ChipDrag {
       const visibleSet = new Set(this.#sourceIds);
       next = [];
       let v = 0;
-      for (const fid of projects.list.map((p) => p.id)) {
+      for (const fid of projects.active.map((p) => p.id)) {
         if (visibleSet.has(fid)) next.push(without[v++]);
         else next.push(fid);
       }

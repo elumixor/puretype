@@ -46,6 +46,8 @@
 
   const matchesFilter = (t: Task) => {
     const pids = taskProjectIds(t);
+    // An archived project hides its tasks everywhere until restored.
+    if (pids.some((id) => projects.isArchived(id))) return false;
     // Tapping a chip mutes a project → hide its tasks.
     if (pids.some((id) => projects.isMuted(id))) return false;
     if (!projects.filterId) return true;

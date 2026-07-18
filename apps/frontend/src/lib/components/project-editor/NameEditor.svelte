@@ -42,7 +42,7 @@
     const exclude = projects.descendantIds(selfId);
     for (const id of parents) exclude.add(id);
     // A source-linked project can't be a parent either.
-    mentionItems = projects.list
+    mentionItems = projects.active
       .filter((p) => !exclude.has(p.id) && !projects.isLinked(p.id) && (!q || p.name.toLowerCase().includes(q)))
       .sort((a, b) => {
         const as = a.name.toLowerCase().startsWith(q) ? 0 : 1;

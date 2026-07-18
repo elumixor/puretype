@@ -18,9 +18,12 @@
   const filtered = $derived(
     all.filter((t) => {
       if (!isArchived(t)) return false;
+      const pids = taskProjectIds(t);
+      // An archived project hides its tasks here too, not just on the board.
+      if (pids.some((id) => projects.isArchived(id))) return false;
       if (!projects.filterId) return true;
       const wanted = projects.descendantIds(projects.filterId);
-      return taskProjectIds(t).some((id) => wanted.has(id));
+      return pids.some((id) => wanted.has(id));
     }),
   );
 

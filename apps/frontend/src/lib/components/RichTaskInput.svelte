@@ -101,7 +101,7 @@
 
   function refreshItems(q: string, skipPlaceFetch = false) {
     const bare = query?.bare ?? false;
-    items = buildItems({ query: q, projects: projects.list, placeItems, bare });
+    items = buildItems({ query: q, projects: projects.active, placeItems, bare });
     active = 0;
     open = items.length > 0;
     if (!skipPlaceFetch && !bare) places.schedule(q);

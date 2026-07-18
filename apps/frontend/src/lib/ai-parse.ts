@@ -15,7 +15,7 @@ export async function enrichWithAI(taskId: string, rawText: string): Promise<voi
   try {
     const res = await api.parse.$post({
       text: rawText,
-      projects: projects.list.map((p) => ({ id: p.id, name: p.name })),
+      projects: projects.active.map((p) => ({ id: p.id, name: p.name })),
       clientDate: localISO(new Date(), false),
     });
 

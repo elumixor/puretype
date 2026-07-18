@@ -23,7 +23,6 @@
   const live = $derived(projects.byId(project.id) ?? project);
   // Source-linked (Google/Notion) projects can't be nested.
   const linked = $derived(projects.isLinked(project.id));
-  let confirmDelete = $state(false);
 
   // parentsDraft mirrors persisted parentIds while editing so the UI reflects
   // additions/removals instantly without a server hop.
@@ -66,9 +65,9 @@
     busy = false;
   }
 
-  async function remove(mode: "clear" | "purge") {
+  async function archive() {
     busy = true;
-    await projects.remove(project.id, mode);
+    await projects.archive(project.id);
     onClose();
   }
 
@@ -168,12 +167,5 @@
     Done
   </button>
 
-  <Actions
-    {busy}
-    hidden={live.hidden}
-    bind:confirming={confirmDelete}
-    label={live.name}
-    onToggleHidden={toggleHidden}
-    onDelete={remove}
-  />
+  <Actions {busy} hidden={live.hidden} onToggleHidden={toggleHidden} onArchive={archive} />
 </div>

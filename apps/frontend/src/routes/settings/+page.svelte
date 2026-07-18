@@ -11,6 +11,7 @@
     signInWithApple,
     signInWithGoogle,
   } from "$lib/auth/social-login";
+  import ArchivedProjects from "$lib/components/ArchivedProjects.svelte";
   import Paywall from "$lib/components/Paywall.svelte";
   import SignInButtons from "$lib/components/SignInButtons.svelte";
   import UserAvatar from "$lib/components/UserAvatar.svelte";
@@ -31,7 +32,7 @@
   const displayName = $derived(me?.name || me?.email || "You");
   const completed = $derived(tasksStore.list.filter((t) => t.completed).length);
   const active = $derived(tasksStore.list.filter((t) => !t.completed).length);
-  const projectCount = $derived(projects.list.length);
+  const projectCount = $derived(projects.active.length);
   const memberSince = $derived(
     me?.createdAt ? new Date(me.createdAt).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : null,
   );
@@ -151,6 +152,16 @@
           <span class="text-xs opacity-80">Voice + AI</span>
         </button>
       {/if}
+    </section>
+  {/if}
+
+  {#if projects.archivedList.length > 0}
+    <section class="mb-7">
+      <h2 class="text-xs font-medium uppercase tracking-wider text-ink-3 mb-2.5">Archived projects</h2>
+      <ArchivedProjects />
+      <p class="text-xs text-ink-3 mt-2 leading-relaxed">
+        Archived projects and their tasks are hidden from every view. Restore one to bring it back, or delete it for good.
+      </p>
     </section>
   {/if}
 

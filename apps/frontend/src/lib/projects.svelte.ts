@@ -66,14 +66,31 @@ class ProjectsStore {
     void ls.set(MUTED_KEY, JSON.stringify([...next]));
   }
 
+  // Archived projects (and their tasks) are hidden from every view until
+  // restored. `active` is the base set the whole UI works from — hidden/visible
+  // are further slices of it, and archived rows never appear in either.
+  get active(): Project[] {
+    return this.list.filter((p) => !this.isArchivedRow(p));
+  }
   get visible(): Project[] {
-    return this.list.filter((p) => !p.hidden);
+    return this.active.filter((p) => !p.hidden);
   }
   get hiddenList(): Project[] {
-    return this.list.filter((p) => p.hidden);
+    return this.active.filter((p) => p.hidden);
+  }
+  get archivedList(): Project[] {
+    return this.list.filter((p) => this.isArchivedRow(p));
   }
   get filter(): Project | undefined {
     return this.list.find((p) => p.id === this.filterId);
+  }
+
+  private isArchivedRow(p: Project): boolean {
+    return !!(p as Project & { archivedAt?: string | null }).archivedAt;
+  }
+  isArchived(id: string): boolean {
+    const p = this.byId(id);
+    return !!p && this.isArchivedRow(p);
   }
 
   async boot() {
@@ -196,6 +213,29 @@ class ProjectsStore {
       clientUpdatedAt: cur.updatedAt as unknown as string,
       mode,
     });
+    sync.schedule(0);
+  }
+
+  // Reversible soft-hide: the project and its tasks drop out of every view but
+  // nothing is destroyed. Applied optimistically by flipping archivedAt locally.
+  async archive(id: string) {
+    await this.setArchived(id, new Date().toISOString());
+    if (this.filterId === id) this.filterId = null;
+    if (this.previousFilterId === id) this.previousFilterId = null;
+  }
+
+  async restore(id: string) {
+    await this.setArchived(id, null);
+  }
+
+  private async setArchived(id: string, archivedAt: string | null) {
+    const cur = this.byId(id);
+    if (!cur) return;
+    const now = new Date().toISOString();
+    const updated = { ...cur, archivedAt, updatedAt: now } as Project;
+    this.list = this.list.map((p) => (p.id === id ? updated : p));
+    await put("projects", $state.snapshot(updated));
+    await enqueue({ kind: archivedAt ? "project.archive" : "project.restore", id });
     sync.schedule(0);
   }
 

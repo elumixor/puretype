@@ -68,8 +68,8 @@
   </button>
 {/snippet}
 
-{#if projects.list.length > 0}
-  {@const shown = projects.showHidden ? projects.list : projects.visible}
+{#if projects.active.length > 0}
+  {@const shown = projects.showHidden ? projects.active : projects.visible}
   {@const hiddenCount = projects.hiddenList.length}
   {@const visibleNoDrag = shown.filter((p) => p.id !== chipDrag.draggingId)}
   <div
