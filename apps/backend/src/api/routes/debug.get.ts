@@ -1,4 +1,4 @@
-import { createClient } from "@libsql/client";
+import { createClient } from "@libsql/client/web";
 import { env } from "env";
 import { defineEventHandler } from "h3";
 

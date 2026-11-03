@@ -1,7 +1,7 @@
 export * from "generated:prisma";
 
 import { PrismaClient } from "generated:prisma";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaLibSql } from "@prisma/adapter-libsql/web";
 import { env } from "env";
 
 type ExtendedPrismaClient = ReturnType<typeof createPrismaClient>;

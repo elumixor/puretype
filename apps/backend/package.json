@@ -11,7 +11,8 @@
     "build": "prisma generate && nitro build",
     "prisma:generate": "prisma generate",
     "prisma:update": "bash scripts/prisma-update.sh",
-    "client:generate": "bunx nitro-client"
+    "client:generate": "bunx nitro-client",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.120",
@@ -28,6 +29,7 @@
     "nitropack": "^2.11.9",
     "prisma": "^7.6.0",
     "rrule": "^2.8.1",
+    "ws": "^8.20.0",
     "zod": "^4.3.6"
   },
   "overrides": {

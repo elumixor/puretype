@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev --host --port 3000",
-    "build": "vite build",
+    "build": "bun run --cwd ../backend client:generate && vite build",
     "preview": "vite preview",
     "sync": "cap sync ios",
     "assets": "bun -e 'import sharp from \"sharp\"; const s=Buffer.from(await Bun.file(\"assets/icon.svg\").arrayBuffer()); await sharp(s,{density:384}).resize(1024,1024).png().toFile(\"assets/icon.png\"); const bg=`<svg width=\"2732\" height=\"2732\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"2732\" height=\"2732\" fill=\"#0b0b10\"/></svg>`; const c=await sharp(s,{density:384}).resize(820,820).png().toBuffer(); for (const f of [\"splash\",\"splash-dark\"]) await sharp(Buffer.from(bg)).composite([{input:c,gravity:\"center\"}]).png().toFile(`assets/${f}.png`);' && capacitor-assets generate --ios && cap sync ios",

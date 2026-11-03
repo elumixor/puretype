@@ -1,7 +1,1 @@
-{
-  "framework": null,
-  "installCommand": "cd ../.. && bun install",
-  "buildCommand": "cd ../backend && bun run client:generate && cd ../frontend && bun run build",
-  "outputDirectory": "build",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
-}
+{ "git": { "deploymentEnabled": false } }

@@ -2,9 +2,10 @@ import { resolve } from "node:path";
 import { defineNitroConfig } from "nitropack/config";
 
 export default defineNitroConfig({
-  preset: "vercel",
   srcDir: "src/api",
   compatibilityDate: "2025-01-01",
+  // @libsql/isomorphic-ws imports `ws`, which the file trace misses under bun's isolated node_modules.
+  externals: { traceInclude: [resolve("node_modules/ws/index.js"), resolve("node_modules/ws/wrapper.mjs")] },
   alias: {
     env: resolve("./src/env"),
     services: resolve("./src/services"),
