@@ -61,7 +61,12 @@
           "webBuildDir": ".",
           "backendDir": "apps/backend",
           "routing": "ssr",
-          "healthPath": "/debug"
+          "healthPath": "/debug",
+          "domains": {
+            "production": [
+              "api.puretype.app"
+            ]
+          }
         }
       },
       "web": {
@@ -69,14 +74,19 @@
         "options": {
           "project": "puretype",
           "frontendDir": "apps/frontend",
-          "apiPrefixes": []
+          "apiPrefixes": [],
+          "domains": {
+            "production": [
+              "puretype.app"
+            ]
+          }
         }
       }
     }
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
-    "@elumixor/devkit": "^0.12.12",
+    "@elumixor/devkit": "^0.12.13",
     "@elumixor/release-ios": "^0.1.2",
     "@libsql/client": "^0.17.2",
     "@types/bun": "^1.3.14",
