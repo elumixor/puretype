@@ -20,7 +20,7 @@ function resolveApiUrl(mode: string) {
   if (mode === "development") return `http://${getLocalIP()}:${apiPort}`;
   throw new Error(
     `VITE_API_URL is required for mode="${mode}". ` +
-      `Set it as a project env var (Vercel) or pass inline ` +
+      `Set it in the deploy env or pass inline ` +
       `(VITE_API_URL=https://api.example.com bun run build).`,
   );
 }

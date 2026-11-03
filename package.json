@@ -36,8 +36,7 @@
     ],
     "setup": {
       "secrets": [
-        ".env",
-        "infra/terraform.tfvars"
+        ".env"
       ],
       "env": [
         {
@@ -45,7 +44,6 @@
           "example": ".env.example"
         }
       ],
-      "terraform": "infra",
       "steps": [
         "ln -sfn ../../.env apps/backend/.env",
         "ln -sfn ../../.env apps/frontend/.env",

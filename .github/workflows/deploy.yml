@@ -1,7 +1,7 @@
 name: Deploy
 
 # A push to main deploys the API (puretype-api) and the web app (puretype) to Devkit Cloud through the dk-deploy
-# OIDC role. Vercel never deploys a push on its own (vercel.json).
+# OIDC role.
 on:
   push:
     branches: [main]

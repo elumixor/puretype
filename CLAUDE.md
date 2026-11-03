@@ -2,34 +2,20 @@
 
 ## Setting up on a new machine
 
-Copy two files from the old machine (both gitignored, both irreplaceable):
-
-- **`.env`** — root only; `apps/backend/.env` and `apps/frontend/.env` are symlinks to it.
-- **`infra/terraform.tfvars`** — `vercel_api_token` / `github_token` plus the prod values.
-
-Then:
+Copy `.env` from the old machine (gitignored, irreplaceable). Root only; `apps/backend/.env` and
+`apps/frontend/.env` are symlinks to it.
 
 ```bash
 gh repo clone elumixor/puretype && cd puretype
 cp /path/to/.env .env
-cp /path/to/terraform.tfvars infra/terraform.tfvars
-terraform login          # state only; see below
-bun run setup            # validates .env, bun install, prisma generate, terraform init
+bun run setup            # validates .env, bun install, prisma generate
 bun run dev
 ```
 
-**Do not try to regenerate `.env` from a remote — there isn't one.** Two dead ends, both tried:
-
-- `vercel env pull` returns these vars as **empty strings**. Terraform declares them `sensitive`, so Vercel
-  stores them write-only. The pull *appears* to succeed and silently produces a `.env` full of blanks.
-- `infra/terraform.tfvars` holds **prod** values, which are not the dev values. `TELEGRAM_BOT_TOKEN` is a
-  separate dev bot; deriving `.env` from tfvars would point local dev at the production Telegram bot.
-
-`bun run setup` therefore validates `.env` and refuses to run on missing/blank keys, but never writes secrets.
-
-Terraform state lives in HCP Terraform (org `atmagaming`, workspace `puretype`), so state itself needs no
-copying — `terraform login` is enough. But `execution-mode` is `local`, so vars still come from the local
-`terraform.tfvars`.
+**Do not try to regenerate `.env` from a remote.** Prod values live in Devkit Cloud (`devkit cloud env ls`) and
+are not the dev values: `TELEGRAM_BOT_TOKEN` is a separate dev bot, so deriving `.env` from prod would point
+local dev at the production Telegram bot. `bun run setup` validates `.env` and refuses to run on missing/blank
+keys, but never writes secrets.
 
 Everything else regenerates: `node_modules`, `apps/backend/generated/` (prisma), `apps/frontend/ios/App/Pods`
 and `capacitor.config.json` (`bun --filter frontend sync`). `bun.lock` is gitignored, so installs are not pinned.
